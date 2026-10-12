@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node smoke.mjs && node site.mjs",
     "test:all": "node test-all.mjs",
+    "compat": "node compat.mjs",
     "smoke": "node smoke.mjs",
     "site": "node site.mjs",
     "teams": "node teams.mjs"

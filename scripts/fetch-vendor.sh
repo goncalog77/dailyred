@@ -8,6 +8,8 @@
 #   - Pixelify Sans, latin subset (SIL Open Font License 1.1)
 #   - Vercel Web Analytics (Apache-2.0): vendored from the pnpm-installed
 #     @vercel/analytics package so the site stays self-hosted.
+#   - fflate (MIT): gzip fallback for browsers without DecompressionStream,
+#     vendored the same way (only downloaded when needed).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -73,5 +75,12 @@ if [ ! -f "$ANALYTICS_SRC" ]; then
   echo "Missing $ANALYTICS_SRC. Run pnpm install first."; exit 1
 fi
 cp "$ANALYTICS_SRC" "$VENDOR/vercel-analytics.js"
+
+echo ">> fflate gzip fallback (from pnpm store, run pnpm install first)"
+FFLATE_SRC="$ROOT/node_modules/fflate/esm/browser.js"
+if [ ! -f "$FFLATE_SRC" ]; then
+  echo "Missing $FFLATE_SRC. Run pnpm install first."; exit 1
+fi
+cp "$FFLATE_SRC" "$VENDOR/fflate.js"
 
 ls -la "$VENDOR"

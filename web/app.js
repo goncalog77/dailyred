@@ -116,7 +116,7 @@ setInterval(() => {
 const megabytes = (n) => (n / 1048576).toFixed(1);
 
 function checkBrowser() {
-  if (typeof WebAssembly !== 'object' || typeof DecompressionStream !== 'function') {
+  if (typeof WebAssembly !== 'object') {
     throw new Error("This browser can't run the game. Use a recent version of Chrome, Edge, Firefox or Safari.");
   }
 }

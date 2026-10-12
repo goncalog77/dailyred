@@ -1,9 +1,11 @@
 // The daily game and the player's stats, saved in this browser (localStorage).
 //
-// Everyone gets the same team on the same calendar day (in their own time
-// zone, like Wordle), and each browser gets one battle with RED per day.
+// Your team is random, but fixed for the whole calendar day (in your own time
+// zone): reopening the site replays the same team until midnight, and each
+// new day rolls a fresh one. Each browser gets one battle with RED per day.
 
 const STORAGE_KEY = 'dailyred-stats';
+const SEEDS_KEY = 'dailyred-day-seeds';
 
 // A date in the player's time zone, e.g. "2026-10-11".
 export function today(now = new Date()) {
@@ -17,14 +19,52 @@ export function addDays(date, days) {
   return today(d);
 }
 
-// The day's team seed: a hash (FNV-1a) of the date, never 0.
-export function dailySeed(date) {
-  let hash = 0x811c9dc5;
-  for (const ch of `dailyred:${date}`) {
-    hash ^= ch.charCodeAt(0);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+// Your team seed for a date: rolled once at random, then kept for the rest
+// of the day, so the team sticks around no matter how often you reopen the
+// site. A new day always rolls a different team than yesterday's.
+let memorySeeds = null; // used when localStorage is blocked
+
+function loadSeeds() {
+  try {
+    memorySeeds = { ...memorySeeds, ...JSON.parse(localStorage.getItem(SEEDS_KEY)) };
+  } catch {
+    // Storage blocked (e.g. some private modes): seeds last until the page closes.
   }
-  return hash || 1;
+  return memorySeeds ?? {};
+}
+
+function randomSeed32() {
+  try {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return buf[0];
+  } catch {
+    return 1 + Math.floor(Math.random() * 0xfffffffe);
+  }
+}
+
+const validSeed = (s) => Number.isInteger(s) && s >= 1 && s <= 0xffffffff;
+
+export function dailySeed(date) {
+  const seeds = loadSeeds();
+  if (!validSeed(seeds[date])) {
+    let seed = 0;
+    do {
+      seed = randomSeed32();
+    } while (seed === 0 || seed === seeds[addDays(date, -1)]);
+    seeds[date] = seed;
+    // Only today is ever replayed; drop anything over a week old.
+    for (const key of Object.keys(seeds)) {
+      if (key < addDays(date, -7)) delete seeds[key];
+    }
+    memorySeeds = { ...seeds };
+    try {
+      localStorage.setItem(SEEDS_KEY, JSON.stringify(seeds));
+    } catch {
+      // Storage blocked: the team still sticks around until the page closes.
+    }
+  }
+  return seeds[date];
 }
 
 export function msUntilTomorrow(now = new Date()) {

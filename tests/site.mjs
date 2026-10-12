@@ -133,6 +133,14 @@ try {
   check(Math.round(box.width) === 720 && Math.round(box.height) === 480, `game screen is 720x480 on desktop (got ${box.width}x${box.height})`);
   const team1 = JSON.stringify(readParty((await getStatus(page)).mem).party.map((m) => m.species));
 
+  // Your team sticks around all day: a second tab replays the same Pokemon.
+  const tab2 = await context.newPage();
+  await tab2.goto(server.url);
+  await tab2.click('#play');
+  await attach(tab2);
+  check(JSON.stringify(readParty((await getStatus(tab2)).mem).party.map((m) => m.species)) === team1, 'reopening the site replays your team for the rest of the day');
+  await tab2.close();
+
   await startRedBattle(page);
   await sleep(1000);
   check((await saved(page))?.pending === DAY1, 'once the battle starts, today counts as played');
@@ -150,14 +158,14 @@ try {
   const cacheKeys = await page.evaluate(async () => { try { return await caches.keys(); } catch { return []; } });
   check(cacheKeys.some((k) => k.startsWith('dailyred-')), `game files persist in the Cache API (${cacheKeys.join(', ') || 'none'})`);
 
-  // Same team for everyone today: a second browser gets the same Pokemon.
+  // Your team is yours alone: a second browser rolls a different one.
   const other = await browser.newContext();
   const otherPage = await other.newPage();
   await otherPage.clock.setFixedTime(at(DAY1, '22:00:00'));
   await otherPage.goto(server.url);
   await otherPage.click('#play');
   await attach(otherPage);
-  check(JSON.stringify(readParty((await getStatus(otherPage)).mem).party.map((m) => m.species)) === team1, 'everyone gets the same team on the same day');
+  check(JSON.stringify(readParty((await getStatus(otherPage)).mem).party.map((m) => m.species)) !== team1, 'a different visitor gets their own random team that day');
   await other.close();
 
   // Day 2: play again, lose.

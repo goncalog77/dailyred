@@ -1,9 +1,9 @@
 # Daily Red
 
 A daily Pokémon battle in the browser, like Wordle: once a day you press
-**Play**, get the day's six random level 100 Pokémon from Generations 1–3
-(everyone gets the same team that day), and climb to RED at the top of the
-mountain. You get one battle per day. Your wins, losses, win streak and daily
+**Play**, get your own six random level 100 Pokémon from Generations 1–3
+(a new random team every day, yours alone), and climb to RED at the top of
+the mountain. You get one battle per day. Your wins, losses, win streak and daily
 play streak are kept in your browser.
 
 Every battle runs on the original Pokémon FireRed engine: the game is the
@@ -86,9 +86,10 @@ file server works without special headers. Everything loads from `web/vendor/`.
 
 ### The daily game
 
-- **The day's team:** the seed is a hash of today's date in the player's own
-  time zone (`dailySeed` in `web/daily.js`), so everyone gets the same team
-  on the same calendar day, like Wordle.
+- **The day's team:** your seed is rolled at random on your first visit each
+  day and kept in your browser (`dailySeed` in `web/daily.js`, localStorage
+  key `dailyred-day-seeds`), so reopening the site replays your team all day
+  and every day brings a fresh one. The day changes at your local midnight.
 - **Site → game:** the ROM contains a small struct, `gDailyRedRomConfig`: the
   magic bytes `DAILYRED-CONF-V2`, then the seed, the player's wins and battles
   so far, and a "daily" flag. Before booting, `web/rom-config.js` finds the
@@ -105,7 +106,7 @@ file server works without special headers. Everything loads from `web/vendor/`.
   result is saved the moment it's known. After the closing messages the game
   fades to black and holds; the site then closes it and shows today's result
   and a countdown to the next battle. Before the battle you can reload freely:
-  it's the same team all day.
+  it's your team all day.
 - **Stats** (`web/daily.js`, localStorage key `dailyred-stats`): wins, losses,
   win streak (daily wins in a row) and day streak (days played in a row).
   Missing a day resets both streaks.
@@ -305,6 +306,19 @@ node tests/test-all.mjs --skip-site --teams-random 5
 node tests/test-all.mjs --help                # all options
 ```
 
+`pnpm compat` boots the site in every installed browser engine (desktop and
+a phone layout, via touch) and checks the game reaches the overworld with no
+page errors — including the gzip fallback for browsers without
+`DecompressionStream`:
+
+```sh
+pnpm compat                    # chromium, firefox, webkit (whichever are installed)
+BROWSER=firefox pnpm compat    # just one engine
+```
+
+Chromium uses your installed Chrome (`CHROME_PATH`); Firefox/WebKit use
+Playwright's bundled builds (`npx playwright install firefox webkit`).
+
 The tests need Google Chrome (or Chromium / Edge on Windows). The usual
 install locations are detected automatically; otherwise point at your binary
 with `CHROME_PATH`:
@@ -345,7 +359,8 @@ them quick and deterministic. Screenshots of every step are saved in
 `pnpm site` plays the daily game over five faked days (Playwright's clock):
 a fresh visitor, emulator audio running after a key press, game files cached
 for repeat visits, a win (stats, locked until tomorrow, countdown, survives a
-reload), the same team in a second browser that day, a loss the next day,
+reload), a different team for a second browser that day (but the same team in
+a second tab), a loss the next day,
 leaving mid-battle (counts as a loss), a missed day (streaks reset), and a
 practice run (`?seed=`, not recorded). It also checks the 3× (720×480)
 screen, RED's sprite, the phone layout and touch d-pad, and the download-error
@@ -424,16 +439,20 @@ footer links to it.
 - **Stats live in the browser:** clearing site data resets them, they don't
   follow you to another device or browser, and anyone can edit their own
   localStorage. That's fine for a casual daily game; there's no server.
-- **Time zones:** the day changes at local midnight, so players in different
-  time zones get each team at different times (as with Wordle).
+- **Time zones:** the day changes at local midnight, when your team rerolls
+  for the new day.
 - **Soft reset** (A+B+Start+Select) is turned off in the daily game, so a
   losing battle can't be restarted. (If the game ever restarts mid-battle
   anyway, the site counts it as a loss.)
 - **Audio** starts suspended unless it begins during a click, so the game
   resumes it on the next key press or tap. The site test checks the emulator's
   audio is running after input.
-- **Tested environment:** Google Chrome (headless, desktop and phone
-  emulation). Not yet tried on Safari, Firefox or real phones.
+- **Browser support:** Chrome, Edge, Firefox and Safari, on desktop and
+  phones. The title card has pixel fallbacks for browsers without
+  container-query units, and the ROM unpacks through the vendored fflate on
+  browsers without `DecompressionStream`. Verified headless with
+  `pnpm compat` (Chromium + Firefox, desktop and phone layouts); Safari's
+  engine needs a Mac or device to run and hasn't been executed here yet.
 - The toolchain scripts (`setup.sh`, `build-rom.sh`, `fetch-vendor.sh`) support
   macOS, Linux and Windows (Git Bash or WSL2); the browser tests additionally
   need Chrome/Chromium (see `CHROME_PATH` above).
@@ -451,11 +470,11 @@ scripts/get-pokefirered.sh           pinned upstream checkout + patch
 scripts/save-patch.sh                pokefirered/ changes → patches/
 scripts/start.sh                     one-command local run: setup → build → serve on localhost
 scripts/build-rom.sh                 make modern → web/game/dailyred.<hash>.gba.gz + manifest.json
-scripts/fetch-vendor.sh              Nostalgist, mGBA core, font (pinned, checksummed)
+scripts/fetch-vendor.sh              Nostalgist, mGBA core, font, analytics, fflate (pinned, checksummed)
 scripts/serve.mjs                    local static server
 scripts/vercel-build.sh              Vercel build: setup → fetch → build into web/
 web/                                 the website
-tests/                               headless browser tests and the teams tool
+tests/                               headless browser tests, the teams tool and the compat matrix
 ```
 
 Inside `pokefirered/`, the Daily Red code is `include/dailyred.h`,

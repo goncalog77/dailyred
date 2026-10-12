@@ -89,7 +89,13 @@ a { color: inherit; text-underline-offset: 3px; }
   overflow: hidden;
   border-radius: 6px;
   background: #000;
+  touch-action: none; /* game gestures must not scroll or zoom the page */
   container-type: size; /* the title card scales with the screen (cqh units) */
+}
+
+/* Fallback for browsers without aspect-ratio (all current ones have it). */
+@supports not (aspect-ratio: 3 / 2) {
+  .screen { height: min(64vw, 480px); }
 }
 
 /* Nostalgist sets inline sizes on the canvas; the screen box decides the real size. */
@@ -133,22 +139,24 @@ a { color: inherit; text-underline-offset: 3px; }
   color: #b9c8d5;
 }
 
-/* Title card: RED, the player's stats, then Play (or today's result). */
-.card-title { gap: 4.5cqh; padding: 4cqh; }
+/* Title card: RED, the player's stats, then Play (or today's result).
+   Pixel fallbacks first; browsers with container-query units (all current
+   ones) get the fluid version below. */
+.card-title { gap: 18px; padding: 24px; }
 
 .red-sprite {
   position: relative;
-  height: 38cqh;
+  height: 120px;
   width: auto;
   image-rendering: pixelated;
-  filter: drop-shadow(0 1cqh 0 rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.35));
 }
 
 .stats {
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0 5cqw;
+  gap: 0 20px;
   margin: 0;
 }
 
@@ -160,36 +168,50 @@ a { color: inherit; text-underline-offset: 3px; }
 
 .stats dd {
   margin: 0;
-  font: 700 max(20px, 9cqh)/1 var(--font-pixel);
+  font: 700 28px/1 var(--font-pixel);
 }
 
 .stats dt {
-  margin-top: 1cqh;
-  font-size: max(11px, 3.4cqh);
+  margin-top: 4px;
+  font-size: 12px;
   color: #b9c8d5;
   white-space: nowrap;
 }
 
 .card-title .button-play {
-  padding: max(10px, 2.6cqh) max(28px, 9cqh);
-  font-size: max(18px, 6cqh);
+  padding: 14px 40px;
+  font-size: 24px;
 }
 
 .played {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1.2cqh;
+  gap: 8px;
 }
 
 .played p { margin: 0; }
 
-.played-result { font: 600 max(16px, 5.6cqh)/1.2 var(--font-pixel); }
+.played-result { font: 600 20px/1.2 var(--font-pixel); }
 
 .played-next {
-  font-size: max(12px, 3.8cqh);
+  font-size: 14px;
   color: #b9c8d5;
   font-variant-numeric: tabular-nums;
+}
+
+/* Fluid title card for browsers with container-query units (all current
+   Chrome, Edge, Firefox and Safari). Older ones keep the pixel sizes above. */
+@supports (width: 1cqw) {
+  .card-title { gap: 4.5cqh; padding: 4cqh; }
+  .red-sprite { height: 38cqh; filter: drop-shadow(0 1cqh 0 rgba(0, 0, 0, 0.35)); }
+  .stats { gap: 0 5cqw; }
+  .stats dd { font-size: max(20px, 9cqh); }
+  .stats dt { margin-top: 1cqh; font-size: max(11px, 3.4cqh); }
+  .card-title .button-play { padding: max(10px, 2.6cqh) max(28px, 9cqh); font-size: max(18px, 6cqh); }
+  .played { gap: 1.2cqh; }
+  .played-result { font-size: max(16px, 5.6cqh); }
+  .played-next { font-size: max(12px, 3.8cqh); }
 }
 
 /* Snow on the title card: the page's one piece of ambient motion. */
@@ -292,6 +314,7 @@ a { color: inherit; text-underline-offset: 3px; }
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none; /* no long-press menu on iOS */
 }
 
 @media (pointer: coarse) {
@@ -376,6 +399,7 @@ a { color: inherit; text-underline-offset: 3px; }
 
 .console:fullscreen .bezel {
   width: min(100%, calc((100vh - 120px) * 1.5));
+  width: min(100%, calc((100dvh - 120px) * 1.5)); /* mobile browser chrome */
   margin: 0 auto;
   padding: 0;
 }
@@ -384,7 +408,10 @@ a { color: inherit; text-underline-offset: 3px; }
 .console:fullscreen .button-quiet { border-color: #3a4c5e; }
 
 @media (pointer: coarse) {
-  .console:fullscreen .bezel { width: min(100%, calc((100vh - 360px) * 1.5)); }
+  .console:fullscreen .bezel {
+    width: min(100%, calc((100vh - 360px) * 1.5));
+    width: min(100%, calc((100dvh - 360px) * 1.5));
+  }
 }
 
 /* Guide -------------------------------------------------------------------- */

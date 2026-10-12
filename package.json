@@ -6,6 +6,7 @@
   "scripts": {
     "build": "bash scripts/vercel-build.sh",
     "start": "bash scripts/start.sh",
+    "compat": "pnpm --filter dailyred-tests compat",
     "smoke": "pnpm --filter dailyred-tests smoke",
     "site": "pnpm --filter dailyred-tests site",
     "teams": "pnpm --filter dailyred-tests teams",
@@ -13,6 +14,7 @@
     "test:all": "pnpm --filter dailyred-tests test:all"
   },
   "dependencies": {
-    "@vercel/analytics": "^2.0.1"
+    "@vercel/analytics": "^2.0.1",
+    "fflate": "^0.8.3"
   }
 }

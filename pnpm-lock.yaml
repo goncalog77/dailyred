@@ -11,6 +11,9 @@ importers:
       '@vercel/analytics':
         specifier: ^2.0.1
         version: 2.0.1
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
 
   tests:
     devDependencies:
@@ -49,6 +52,9 @@ packages:
       vue-router:
         optional: true
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   playwright-core@1.56.1:
     resolution: {integrity: sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==}
     engines: {node: '>=18'}
@@ -57,5 +63,7 @@ packages:
 snapshots:
 
   '@vercel/analytics@2.0.1': {}
+
+  fflate@0.8.3: {}
 
   playwright-core@1.56.1: {}

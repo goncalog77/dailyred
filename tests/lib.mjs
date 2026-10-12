@@ -49,6 +49,14 @@ export async function startServer() {
 }
 
 export async function launchBrowser() {
+  // BROWSER=chromium (default), firefox or webkit. Chromium uses your
+  // installed Chrome (see findChrome); the others use Playwright's bundled
+  // builds (npx playwright install firefox webkit).
+  const kind = (process.env.BROWSER || 'chromium').toLowerCase();
+  if (kind === 'firefox' || kind === 'webkit') {
+    const browsers = await import('playwright-core');
+    return browsers[kind].launch({ headless: true });
+  }
   const { chromium } = await import('playwright-core');
   return chromium.launch({
     executablePath: findChrome(),

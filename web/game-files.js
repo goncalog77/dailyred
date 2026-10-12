@@ -108,6 +108,22 @@ async function gunzip(bytes) {
   // Some hosts send .gz files with Content-Encoding: gzip, in which case the
   // browser has already unpacked it.
   if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  if (typeof DecompressionStream === 'function') {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  // Older Safari/Firefox without DecompressionStream: same job with the
+  // vendored fflate, downloaded only on this path.
+  const { Gunzip } = await import('./vendor/fflate.js');
+  const gunzip = new Gunzip();
+  const chunks = [];
+  gunzip.ondata = (chunk) => chunks.push(chunk);
+  gunzip.push(bytes, true);
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
 }
