@@ -45,6 +45,15 @@ function randomSeed32() {
 
 const validSeed = (s) => Number.isInteger(s) && s >= 1 && s <= 0xffffffff;
 
+// A fresh random seed (never 0): for the fun rematch (see app.js).
+export function randomSeed() {
+  let seed = 0;
+  do {
+    seed = randomSeed32();
+  } while (seed === 0);
+  return seed;
+}
+
 export function dailySeed(date) {
   const seeds = loadSeeds();
   if (!validSeed(seeds[date])) {

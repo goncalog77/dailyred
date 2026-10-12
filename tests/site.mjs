@@ -158,6 +158,21 @@ try {
   const cacheKeys = await page.evaluate(async () => { try { return await caches.keys(); } catch { return []; } });
   check(cacheKeys.some((k) => k.startsWith('dailyred-')), `game files persist in the Cache API (${cacheKeys.join(', ') || 'none'})`);
 
+  // Second chance, just for fun: a rematch with a brand-new team that
+  // records nothing and keeps the daily lock.
+  check(await page.locator('#try-again').isVisible(), 'after playing, a second chance is offered');
+  await page.click('#try-again');
+  await attach(page);
+  check(JSON.stringify(readParty((await getStatus(page)).mem).party.map((m) => m.species)) !== team1, 'the rematch deals a new team');
+  await startRedBattle(page);
+  await forceWin(page);
+  check(await finishDailyGame(page), 'after the rematch the site returns to the title card');
+  s = await shown(page);
+  check(s.wins === '1' && s.losses === '0' && s.winStreak === '1' && s.dayStreak === '1', `rematch is not recorded (${statLine(s)})`);
+  check(!s.canPlay && s.played === 'You beat RED today!', 'still locked to one daily battle');
+  check((await saved(page))?.pending == null, 'no pending battle left behind');
+  check(await page.locator('#try-again').isVisible(), 'the second chance can be replayed');
+
   // Your team is yours alone: a second browser rolls a different one.
   const other = await browser.newContext();
   const otherPage = await other.newPage();

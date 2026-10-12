@@ -3,7 +3,8 @@
 A daily Pokémon battle in the browser, like Wordle: once a day you press
 **Play**, get your own six random level 100 Pokémon from Generations 1–3
 (a new random team every day, yours alone), and climb to RED at the top of
-the mountain. You get one battle per day. Your wins, losses, win streak and daily
+the mountain. You get one battle per day — plus, once you've played, an
+unrecorded rematch with a fresh team just for fun. Your wins, losses, win streak and daily
 play streak are kept in your browser.
 
 Every battle runs on the original Pokémon FireRed engine: the game is the
@@ -107,6 +108,11 @@ file server works without special headers. Everything loads from `web/vendor/`.
   fades to black and holds; the site then closes it and shows today's result
   and a countdown to the next battle. Before the battle you can reload freely:
   it's your team all day.
+- **Second chance, just for fun:** once today's battle is done, "Try again
+  for fun" deals a brand-new team for one more battle — all or nothing, no
+  consequences. It runs as a daily-mode game (so it ends after one battle)
+  but nothing is recorded and the daily lock is untouched; it can be replayed
+  as often as you like.
 - **Stats** (`web/daily.js`, localStorage key `dailyred-stats`): wins, losses,
   win streak (daily wins in a row) and day streak (days played in a row).
   Missing a day resets both streaks.
@@ -359,7 +365,7 @@ them quick and deterministic. Screenshots of every step are saved in
 `pnpm site` plays the daily game over five faked days (Playwright's clock):
 a fresh visitor, emulator audio running after a key press, game files cached
 for repeat visits, a win (stats, locked until tomorrow, countdown, survives a
-reload), a different team for a second browser that day (but the same team in
+reload), a fun rematch with a new team (not recorded, lock kept), a different team for a second browser that day (but the same team in
 a second tab), a loss the next day,
 leaving mid-battle (counts as a loss), a missed day (streaks reset), and a
 practice run (`?seed=`, not recorded). It also checks the 3× (720×480)
@@ -409,6 +415,22 @@ the site already ships the tracking snippet (`web/vendor/vercel-analytics.js`,
 via the `@vercel/analytics` dependency) and reports page views automatically.
 
 To verify the exact deploy build locally first: `pnpm build`.
+
+### Keep the deployment private
+
+The deployed site serves a built Pokémon ROM, which is Nintendo's
+copyrighted content — a public URL is a takedown risk no disclaimer can
+remove. The safest way to play is locally (`scripts/start.sh`). If you
+deploy, keep it private:
+
+- Enable deployment protection (Vercel dashboard → project → Settings →
+  Deployment Protection) and share the URL only with a few people.
+- Use a neutral project/domain name — never one containing "Pokémon".
+- The site already asks search engines to stay away (`web/robots.txt` plus a
+  `noindex` meta tag); don't link it from public profiles.
+- Never monetize it: no ads, donations, or paywalled access.
+- If a takedown notice ever arrives, comply promptly: take the deployment
+  down, don't counter-notice, and don't re-upload it elsewhere.
 
 ## Copyright and licenses
 

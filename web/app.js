@@ -8,7 +8,7 @@ import { loadGameFiles } from './game-files.js';
 import { injectConfig, parseSeed } from './rom-config.js';
 import { createGameLink, PHASE, RESULT } from './game-link.js';
 import {
-  today, dailySeed, msUntilTomorrow, loadStats, resultFor, currentStreaks,
+  today, dailySeed, randomSeed, msUntilTomorrow, loadStats, resultFor, currentStreaks,
   markBattleStarted, recordResult, settleAbandonedGame,
 } from './daily.js';
 
@@ -27,6 +27,7 @@ const ui = {
   played: $('played'),
   playedResult: $('played-result'),
   playedNext: $('played-next'),
+  tryAgain: $('try-again'),
   practiceNote: $('practice-note'),
   loadingText: $('loading-text'),
   loadingDetail: $('loading-detail'),
@@ -49,6 +50,8 @@ let emu = null;
 let readGame = null;
 let pollTimer = null;
 let runDate = null;
+let runUnrecorded = false; // practice and fun rematches never touch the stats
+let funRunSeed = null; // one-shot token set by the try-again button
 let battleSeen = false;
 let muted = session.get('dailyred-muted') === '1';
 let starting = false;
@@ -125,6 +128,7 @@ function stopEmulator() {
   clearInterval(pollTimer);
   pollTimer = null;
   readGame = null;
+  runUnrecorded = false;
   if (emu) {
     try {
       emu.exit();
@@ -152,12 +156,15 @@ async function startRun() {
 
     runDate = today();
     stats = loadStats(); // another tab may have played meanwhile
-    if (!practiceSeed && resultFor(stats, runDate)) {
+    const fun = funRunSeed; // consume the one-shot rematch token
+    funRunSeed = null;
+    runUnrecorded = fun != null || practiceSeed != null;
+    if (!runUnrecorded && resultFor(stats, runDate)) {
       renderTitle();
       setState('title');
       return;
     }
-    const seed = practiceSeed ?? dailySeed(runDate);
+    const seed = practiceSeed ?? fun ?? dailySeed(runDate);
     const rom = practiceSeed
       ? injectConfig(files.rom, { seed })
       : injectConfig(files.rom, { seed, wins: stats.wins, battles: stats.wins + stats.losses, daily: true });
@@ -215,7 +222,14 @@ function watchGame() {
   } catch {
     return;
   }
-  if (!status || practiceSeed) return;
+  if (!status) return;
+  // Daily-mode games (the daily battle and fun rematches) end after one
+  // battle; practice runs deal a new team instead and never finish.
+  if (status.phase === PHASE.FINISHED) {
+    endDailyGame(1000);
+    return;
+  }
+  if (runUnrecorded) return;
   if (status.phase >= PHASE.BATTLE) {
     battleSeen = true;
     markBattleStarted(stats, runDate);
@@ -252,6 +266,14 @@ function onClick(button, handler) {
 
 onClick(ui.play, startRun);
 onClick(ui.retry, startRun);
+
+// Second chance, just for fun: one more battle with a brand-new team. It
+// runs as a daily-mode game (so it ends after one battle) but nothing is
+// recorded and the daily lock is untouched — all or nothing, no consequences.
+onClick(ui.tryAgain, () => {
+  funRunSeed = randomSeed();
+  startRun();
+});
 
 onClick(ui.sound, () => {
   if (!emu) return;

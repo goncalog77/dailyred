@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Daily Red</title>
   <meta name="description" content="One Pokémon battle a day: six random level 100 Pokémon against RED at the top of the mountain.">
+  <meta name="robots" content="noindex, nofollow">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preload" href="vendor/pixelify-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -33,6 +34,8 @@
             <div class="played" id="played" hidden>
               <p class="played-result" id="played-result"></p>
               <p class="played-next" id="played-next"></p>
+              <p class="card-note">Think you can do better? One more shot — all or nothing. Your record stays as it is.</p>
+              <button class="button button-play" id="try-again" type="button">Try again for fun</button>
             </div>
             <p class="card-note" id="practice-note" hidden>Practice run: results aren't saved.</p>
           </div>

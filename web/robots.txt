@@ -1,0 +1,3 @@
+# Daily Red is a private fan project: stay out of search engines.
+User-agent: *
+Disallow: /
