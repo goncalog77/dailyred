@@ -164,13 +164,16 @@ not the byte-matching `agbcc` build, so it doesn't reproduce the retail ROM.
 (`gLevelUpLearnsets`, `CanMonLearnTMHM`, the TM/HM move table,
 `CreateMon`, `CalculateMonStats`):
 
-- **Species:** 6 different Pokémon from all 386 of Generations 1–3 whose
-  **base stat totals add up to at least 2700** (`MIN_TEAM_BASE_STAT_TOTAL`).
-  **Legendaries are a 1-in-8 roll** (`LEGENDARY_TEAM_ODDS`): 1 team in 8 gets
+- **Species:** 6 different fully evolved Pokémon from Generations 1–3 whose
+  **base stat totals add up to at least 2700** (`MIN_TEAM_BASE_STAT_TOTAL`),
+  with no single type on more than half the team. Unevolved base forms can't
+  evolve further in this game (no trading, stones or friendship), and Ditto,
+  Unown, Smeargle and Shedinja would always hand over a dead slot, so none of
+  them appear. **Legendaries are a 1-in-8 roll** (`LEGENDARY_TEAM_ODDS`): 1 team in 8 gets
   exactly one legendary or mythical Pokémon, in a random party slot, and the
   other 7 get none. The generator then redraws the rest of the team until it
-  meets the minimum, so every qualifying team is equally likely. Per-species
-  rules live in `IsEligibleSpecies`, e.g. add "fully evolved only" there.
+  meets the minimum and the type-variety rule, so every qualifying team is equally likely. Per-species
+  rules live in `IsEligibleSpecies`.
 
   Why a minimum: RED's team totals 2954 (see below). A fully random team
   averages about 2430, and two thirds of them include a Pokémon under 300,
@@ -199,11 +202,16 @@ not the byte-matching `agbcc` build, so it doesn't reproduce the retail ROM.
   Light Ball doubles its Sp. Atk) and the strongest trainer AI, so he stays
   the favourite.
 
-- **Moves:** up to 4 different moves picked uniformly from everything the
-  species can learn **by level-up (any level) or TM/HM**. One rule on top: if
-  none of the four can deal damage and the species has any damaging move, one
-  pick is swapped for a damaging move. Species with fewer than 4 learnable moves
-  (Ditto, Unown, Magikarp, Smeargle…) get all of them.
+- **Moves:** up to 4 different moves from everything the
+  species can learn **by level-up (any level) or TM/HM**: a STAB attack first
+  when the species has one, a second real attack when it has two, then weighted
+  sampling without repeats — attacks score by power × accuracy (STAB scores half
+  as much again), other moves a flat utility weight scaled by accuracy. Two rules
+  on top: fixed-damage moves (Seismic Toss, Dragon Rage, …) don't count as attacks
+  since they deal flat damage at level 100 (a fixed-damage move is still taken when
+  the species has no real attack, so nothing is ever helpless), and Splash is only
+  ever picked when the pool leaves no choice. Species with fewer than 4 learnable moves
+  (Wobbuffet…) get all of them.
 - **Stats:** level 100, random personality (so random nature, gender, ability
   and the usual 1/8192 shiny chance), and trained close to RED's level:
   - **IVs** random from 25 to 31 in every stat (`MIN_TEAM_IV`); RED's are all 31.
@@ -220,7 +228,10 @@ not the byte-matching `agbcc` build, so it doesn't reproduce the retail ROM.
   generally useful battle items (`sBattleItems`: Leftovers, Choice Band,
   Quick Claw, Lum Berry, pinch berries…) plus the 10% type booster for each
   type it actually attacks with (Charcoal only if it has a Fire attack, and
-  so on). There are still no bag items.
+  so on). Two rules keep items honest: Choice Band (which locks the holder into
+  one physical move) only goes to purely physical attackers, and the species-only
+  items only go to their species (Thick Club to Marowak, Stick to Farfetch'd).
+  There are still no bag items.
 - **Safety:** each Pokémon is validated (level, HP, at least one move, no
   duplicate moves, PP). If a Pokémon somehow failed 10 times, the game would
   use FireRed's own default level-100 moveset for it rather than hand over
@@ -228,11 +239,10 @@ not the byte-matching `agbcc` build, so it doesn't reproduce the retail ROM.
 
 Trade-offs in this first version: the move picker ignores move tutors and egg
 moves (add them in `GetLearnableMoves`), and it's deliberately not
-competitive. Splash, Water Sport or three status moves plus one attack are all
-possible. Items are picked without looking at the moveset beyond type
-boosters, so a Choice Band can land on a Pokémon that mostly uses status
-moves, and species-specific items (Light Ball, Thick Club…) aren't in the pool.
-The generator uses its own RNG state, separate from the game's `Random()`, so
+competitive: three status moves plus one attack are still possible for species
+with thin attack pools, and same-type attacks can double up. Items are picked
+without looking at the moveset beyond physical/special and type
+boosters. The generator uses its own RNG state, separate from the game's `Random()`, so
 teams depend only on the seed.
 
 ## RED's team

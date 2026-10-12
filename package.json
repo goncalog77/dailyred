@@ -5,13 +5,7 @@
   "packageManager": "pnpm@10.23.0",
   "scripts": {
     "build": "bash scripts/vercel-build.sh",
-    "start": "bash scripts/start.sh",
-    "compat": "pnpm --filter dailyred-tests compat",
-    "smoke": "pnpm --filter dailyred-tests smoke",
-    "site": "pnpm --filter dailyred-tests site",
-    "teams": "pnpm --filter dailyred-tests teams",
-    "test": "pnpm --filter dailyred-tests test",
-    "test:all": "pnpm --filter dailyred-tests test:all"
+    "start": "bash scripts/start.sh"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
