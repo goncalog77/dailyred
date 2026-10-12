@@ -20,6 +20,16 @@ fi
 export CPATH="$TC/libpng/include${CPATH:+:$CPATH}"
 export LIBRARY_PATH="$TC/libpng/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 # A no-op pkg-config so the tool Makefiles don't print "command not found".
+# ccache (when installed) speeds up rebuilds of the host tools (gbagfx and
+# friends) via the distro's compiler masquerades. The ARM game objects can't
+# use it: the build pipes preprocessed sources through cc1/as on stdin, which
+# ccache can't cache — so the cross-compiler stays direct on purpose.
+if command -v ccache >/dev/null 2>&1; then
+  export CCACHE_DIR="$TC/ccache" CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
+  [ -d /usr/lib64/ccache ] && export PATH="/usr/lib64/ccache:$PATH"
+  echo ">> ccache enabled for host tools (max $CCACHE_MAXSIZE)"
+fi
+rm -rf "$TC/wrap" "$TC/ccache-bin" # leftover experiments, if any
 export PATH="$ROOT/scripts/shims:$PATH"
 
 # Portable CPU count: Windows' NUMBER_OF_PROCESSORS (inherited by Git Bash),

@@ -272,7 +272,9 @@ come from FireRed's usual name-based formula and aren't configurable.
 ## Development workflow
 
 1. Edit files in `pokefirered/` (a git checkout of pret's repo).
-2. `scripts/build-rom.sh` (incremental builds take a few seconds).
+2. `scripts/build-rom.sh` (incremental builds take a few seconds; a full
+   rebuild from scratch takes under a minute on a modern desktop, and host
+   tools reuse ccache when it's installed).
 3. Reload the page. `scripts/serve.mjs` sends `Cache-Control: no-cache`.
 4. When you're happy, run `scripts/save-patch.sh` and commit
    `patches/pokefirered-dailyred.patch`.
@@ -369,7 +371,8 @@ reload), a fun rematch with a new team (not recorded, lock kept), a different te
 a second tab), a loss the next day,
 leaving mid-battle (counts as a loss), a missed day (streaks reset), and a
 practice run (`?seed=`, not recorded). It also checks the 3× (720×480)
-screen, RED's sprite, the phone layout and touch d-pad, and the download-error
+screen, RED's sprite, the phone layout and touch controls (d-pad, menu via
+Start, L/R buttons), and the download-error
 screen with "Try again".
 
 **Checking by hand:** open `http://localhost:8080/?seed=42` for a practice run

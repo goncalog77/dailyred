@@ -50,6 +50,21 @@ EOF
 
 mkdir -p "$VENDOR"
 
+# Re-running otherwise re-downloads everything; skip when complete.
+# Pass --force to refetch (e.g. after a version bump above).
+if [ "${1:-}" != "--force" ]; then
+  complete=1
+  for f in nostalgist.js nostalgist.LICENSE.txt mgba_libretro.js mgba_libretro.wasm \
+           pixelify-sans.woff2 pixelify-sans.OFL.txt vercel-analytics.js fflate.js; do
+    [ -f "$VENDOR/$f" ] || complete=0
+  done
+  if [ "$complete" = "1" ]; then
+    echo ">> web/vendor/ already populated, nothing to do (scripts/fetch-vendor.sh --force to refetch)"
+    ls -la "$VENDOR"
+    exit 0
+  fi
+fi
+
 echo ">> Nostalgist $NOSTALGIST_VER"
 curl -fSL --retry 3 -o "$TMP/nostalgist.tgz" "https://registry.npmjs.org/nostalgist/-/nostalgist-$NOSTALGIST_VER.tgz"
 check "$TMP/nostalgist.tgz" "$NOSTALGIST_SHA"

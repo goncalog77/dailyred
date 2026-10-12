@@ -147,6 +147,13 @@ try {
   await screenshot(page, `${OUT}/04-party-actions.png`);
   await press(page, 'a'); await sleep(2500);
   await screenshot(page, `${OUT}/05-summary.png`);
+  // L/R turn the summary pages (INFO -> SKILLS -> MOVES): forward, then back.
+  const sumShot = () => page.locator('canvas').first().screenshot();
+  const sum0 = await sumShot();
+  await press(page, 'r'); await sleep(1200);
+  check(!(await sumShot()).equals(sum0), 'R turns the summary page forward');
+  await press(page, 'l'); await sleep(1200);
+  check((await sumShot()).equals(sum0), 'L turns the summary page back');
   await press(page, 'right'); await sleep(800);
   await screenshot(page, `${OUT}/06-summary-stats.png`);
   await press(page, 'right'); await sleep(800);

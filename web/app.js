@@ -3,7 +3,6 @@
 // ROM; this file starts it with the day's seed, watches for the result, and
 // keeps the stats (see daily.js).
 import { Nostalgist } from './vendor/nostalgist.js';
-import { inject as injectAnalytics } from './vendor/vercel-analytics.js';
 import { loadGameFiles } from './game-files.js';
 import { injectConfig, parseSeed } from './rom-config.js';
 import { createGameLink, PHASE, RESULT } from './game-link.js';
@@ -124,9 +123,21 @@ function checkBrowser() {
   }
 }
 
-function stopEmulator() {
+// Reading game RAM needs a full emulator save state twice a second, so the
+// poller only runs while it can observe something: a live daily/fun run in
+// a visible tab. Practice runs and hidden tabs skip it entirely.
+function startPolling() {
+  stopPolling();
+  if (readGame) pollTimer = setInterval(watchGame, 500);
+}
+
+function stopPolling() {
   clearInterval(pollTimer);
   pollTimer = null;
+}
+
+function stopEmulator() {
+  stopPolling();
   readGame = null;
   runUnrecorded = false;
   if (emu) {
@@ -185,10 +196,14 @@ async function startRun() {
       resolveCoreWasm: () => files.coreWasm,
       retroarchConfig: {
         audio_mute_enable: muted,
-        // Enter, Escape and Space are handled below through the emulator
-        // API, so Enter must not keep its built-in Start binding (one key
-        // must not press two buttons at once). "nul" is RetroArch's unbound.
-        input_player1_start: 'nul',
+        // L/R are bound to Q/E for list scrolling and the summary pages
+        // (RetroArch leaves them unbound by default). All four are also
+        // touch buttons on phones. Start keeps its built-in Enter binding
+        // for the emulator API; real Enter keypresses never reach it (see
+        // the capture handler below), so one key never presses two buttons
+        // at once.
+        input_player1_l: 'q',
+        input_player1_r: 'e',
         // The site never makes save states itself; uncompressed ones let the
         // debugging tools in tests/ read the game's RAM.
         savestate_file_compression: false,
@@ -198,7 +213,8 @@ async function startRun() {
 
     readGame = createGameLink(emu, seed);
     battleSeen = false;
-    pollTimer = setInterval(watchGame, 500);
+    // Practice runs need no observation; hidden tabs pause below.
+    if (!practiceSeed) startPolling();
     setState('playing');
   } catch (err) {
     console.error(err);
@@ -244,8 +260,7 @@ function watchGame() {
 }
 
 function endDailyGame(delayMs) {
-  clearInterval(pollTimer);
-  pollTimer = null;
+  stopPolling();
   setTimeout(() => {
     stopEmulator();
     renderTitle();
@@ -297,39 +312,55 @@ document.addEventListener('fullscreenchange', () => {
   ui.fullscreen.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
 });
 
-// Don't let arrow keys and space scroll the page while playing.
-window.addEventListener('keydown', (event) => {
-  if (app.dataset.state === 'playing' && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
-    event.preventDefault();
-  }
-});
-
 // Extra shortcuts alongside the emulator's own mapping (X = A, Z = B,
-// arrows, Right Shift = Select): Enter confirms like A, Escape cancels like
-// B, and Space opens the menu like Start. Driven through the emulator's API,
-// so held keys behave exactly like the touch buttons.
-const extraKeys = { Enter: 'a', NumpadEnter: 'a', Escape: 'b', Space: 'start' };
+// Enter = Start, W = R, arrows, Right Shift = Select): Enter confirms like A,
+// Escape cancels like B, Space opens the menu like Start, and Q flips back
+// like L. Driven through the emulator's API, so held keys behave exactly
+// like the touch buttons. (Real keypresses only reach the emulator's default
+// bindings; Q has none, so it goes through the API instead.)
+// Capture phase: this runs before the emulator's own listeners, so a handled
+// Enter never also reaches its built-in Start binding.
+const extraKeys = { Enter: 'a', NumpadEnter: 'a', Escape: 'b', Space: 'start', KeyQ: 'l' };
 window.addEventListener('keydown', (event) => {
-  if (app.dataset.state !== 'playing' || !emu || event.repeat) return;
-  // A focused button keeps its native keyboard behavior (Enter clicks it).
-  if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+  if (app.dataset.state !== 'playing') return;
+  // Extra keys first: Space's key value (' ') is also in the scroll list
+  // below, so looking it up by code has to come first.
   const button = extraKeys[event.code];
-  if (button) {
+  const onButton = event.target instanceof HTMLElement && event.target.closest('button');
+  if (button && emu && !onButton) {
     event.preventDefault();
-    emu.pressDown(button);
+    event.stopImmediatePropagation();
+    resumeAudio();
+    if (!event.repeat) emu.pressDown(button);
+    return;
   }
-});
+  if (button && onButton) {
+    // A focused button keeps its native keyboard behavior (Enter clicks it),
+    // but the emulator must not see the key as well.
+    event.stopImmediatePropagation();
+    return;
+  }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+    event.preventDefault(); // don't scroll the page while playing
+  }
+}, true);
 window.addEventListener('keyup', (event) => {
   if (!emu) return;
   const button = extraKeys[event.code];
   if (button) emu.pressUp(button);
 });
 
-// Pause when the tab is hidden.
+// Pause when the tab is hidden: the emulator and its RAM poller both stop,
+// so a background tab burns no CPU or battery.
 document.addEventListener('visibilitychange', () => {
   if (!emu) return;
-  if (document.hidden) emu.pause();
-  else emu.resume();
+  if (document.hidden) {
+    emu.pause();
+    stopPolling();
+  } else {
+    emu.resume();
+    startPolling();
+  }
 });
 
 // Browsers start audio suspended unless it begins during a click; the
@@ -394,13 +425,15 @@ dpad.addEventListener('pointerup', () => setDirection(null));
 dpad.addEventListener('pointercancel', () => setDirection(null));
 
 // Web Analytics (Vercel dashboard → project → Analytics → Enable). Skipped on
-// local runs so dev visits send nothing anywhere.
+// local runs so dev visits send nothing anywhere; the snippet itself is only
+// downloaded off-localhost too.
 if (!['localhost', '127.0.0.1'].includes(location.hostname) && location.protocol.startsWith('http')) {
-  try {
-    injectAnalytics();
-  } catch {
-    // Analytics must never break the game.
-  }
+  import('./vendor/vercel-analytics.js').then(
+    ({ inject }) => inject(),
+    () => {
+      // Analytics must never break the game.
+    },
+  );
 }
 
 // For debugging from the console and for the automated tests.

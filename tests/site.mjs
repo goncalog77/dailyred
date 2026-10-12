@@ -112,9 +112,15 @@ try {
     delete emu.__origPress;
   });
   // Space is Start: it opens the menu (the player can't walk while it's
-  // open), and Escape backs out again.
+  // open), and Escape backs out again. Holds, not taps: the core samples
+  // input once per frame and misses anything shorter.
+  async function heldKey(code) {
+    await page.keyboard.down(code);
+    await sleep(400);
+    await page.keyboard.up(code);
+  }
   const yBeforeMenu = (await getStatus(page)).y;
-  await page.keyboard.press(' ');
+  await heldKey('Space');
   await sleep(800);
   await page.evaluate(() => window.emu.pressDown('up'));
   await sleep(600);
@@ -122,7 +128,7 @@ try {
   await sleep(300);
   const menuOpened = (await getStatus(page)).y === yBeforeMenu;
   check(menuOpened, 'Space opens the menu (the player cannot walk while it is open)');
-  await page.keyboard.press('Escape');
+  await heldKey('Escape');
   await sleep(800);
   await page.evaluate(() => window.emu.pressDown('up'));
   await sleep(600);
@@ -251,6 +257,7 @@ try {
   });
   check(fits, 'the title card fits inside the phone-sized screen');
   check(await phone.locator('.pad').isVisible(), 'touch controls are shown on a phone');
+  check(await phone.locator('[data-button="l"]').isVisible() && await phone.locator('[data-button="r"]').isVisible(), 'L/R touch buttons are shown on a phone');
   await phone.click('#play');
   await attach(phone);
   await sleep(1500);
@@ -263,6 +270,30 @@ try {
   await sleep(600);
   const endY = (await getStatus(phone)).y;
   check(endY < startY, `touch d-pad moves the player (y ${startY} -> ${endY})`);
+  // The Start pill opens the menu (walking blocked), the B pill closes it.
+  // Holds, not taps: the core samples input once per frame.
+  async function holdPill(selector) {
+    const box = await phone.locator(selector).boundingBox();
+    await phone.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await phone.mouse.down();
+    await sleep(400);
+    await phone.mouse.up();
+    await sleep(800);
+  }
+  async function holdUpOnDpad() {
+    await phone.mouse.move(dpad.x + dpad.width / 2, dpad.y + 10);
+    await phone.mouse.down();
+    await sleep(600);
+    await phone.mouse.up();
+    await sleep(300);
+  }
+  await holdPill('[data-button="start"]');
+  await holdUpOnDpad();
+  const menuOpen = (await getStatus(phone)).y === endY;
+  check(menuOpen, 'touch Start opens the menu (the player cannot walk while it is open)');
+  await holdPill('[data-button="b"]');
+  await holdUpOnDpad();
+  check(menuOpen && (await getStatus(phone)).y < endY, 'touch B closes the menu (the player walks again)');
   await phone.screenshot({ path: `${OUT}/site-phone-playing.png` });
   await phoneContext.close();
 
