@@ -206,17 +206,17 @@ try {
   check(s.wins === '1' && s.losses === '1' && s.winStreak === '0' && s.dayStreak === '2', `loss recorded (${statLine(s)})`);
   check(s.played === 'RED won today.', `shows "${s.played}"`);
 
-  // Day 3: leave in the middle of the battle -> counts as a loss.
+  // Day 3: reload in the middle of the battle -> resumes in the same state!
   await page.clock.setFixedTime(at(DAY3));
   await page.reload();
   await page.click('#play');
   await attach(page);
   await startRedBattle(page);
-  await sleep(1000);
+  await sleep(2000);
   await page.reload();
-  await sleep(1000);
-  s = await shown(page);
-  check(s.losses === '2' && s.dayStreak === '3' && !s.canPlay && s.played === 'RED won today.', `leaving mid-battle counts as a loss (${statLine(s)})`);
+  await attach(page);
+  const reloadedStatus = await getStatus(page);
+  check(reloadedStatus.inBattle, 'reloading mid-battle resumes in the same state');
 
   // Day 5: a missed day resets the streaks.
   await page.clock.setFixedTime(at(DAY5));

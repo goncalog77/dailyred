@@ -147,13 +147,15 @@ export function recordResult(stats, date, won) {
   save(stats);
 }
 
-// A battle that started but never finished (tab closed, page reloaded) is a loss.
-export function settleAbandonedGame(stats) {
-  if (stats.pending && stats.pending !== stats.lastPlayed) {
-    recordResult(stats, stats.pending, false);
-  } else if (stats.pending) {
-    stats.pending = null;
-    save(stats);
+// A battle that started on a previous day but never finished is a loss.
+export function settleAbandonedGame(stats, currentDate = today()) {
+  if (stats.pending && stats.pending !== currentDate) {
+    if (stats.pending !== stats.lastPlayed) {
+      recordResult(stats, stats.pending, false);
+    } else {
+      stats.pending = null;
+      save(stats);
+    }
   }
   return stats;
 }

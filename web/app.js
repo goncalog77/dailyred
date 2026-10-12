@@ -10,6 +10,9 @@ import {
   today, dailySeed, randomSeed, msUntilTomorrow, loadStats, resultFor, currentStreaks,
   markBattleStarted, recordResult, settleAbandonedGame,
 } from './daily.js';
+import {
+  hasActiveSession, setActiveSession, saveActiveState, loadActiveState, clearActiveState,
+} from './save-state.js';
 
 const $ = (id) => document.getElementById(id);
 const app = document.querySelector('.app');
@@ -44,11 +47,14 @@ const session = {
 // aren't saved, there's no daily limit, and the game keeps dealing new teams.
 const practiceSeed = parseSeed(new URLSearchParams(location.search).get('seed'));
 
-let stats = settleAbandonedGame(loadStats());
+let stats = loadStats();
 let emu = null;
 let readGame = null;
 let pollTimer = null;
 let runDate = null;
+let currentSeed = null;
+let isSaving = false;
+let lastAutoSave = 0;
 let runUnrecorded = false; // practice and fun rematches never touch the stats
 let funRunSeed = null; // one-shot token set by the try-again button
 let battleSeen = false;
@@ -151,36 +157,71 @@ function stopEmulator() {
   for (const ctx of audioContexts.splice(0)) ctx.close().catch(() => {});
 }
 
-async function startRun() {
+async function saveCurrentState() {
+  if (isSaving || !emu || app.dataset.state !== 'playing' || !runDate || currentSeed == null) return;
+  isSaving = true;
+  lastAutoSave = Date.now();
+  try {
+    const { state } = await emu.saveState();
+    await saveActiveState({
+      date: runDate,
+      seed: currentSeed,
+      wins: stats.wins,
+      battles: stats.wins + stats.losses,
+      runUnrecorded,
+      isPractice: practiceSeed != null,
+      battleSeen,
+      stateBlob: state,
+    });
+  } catch (err) {
+    console.warn('Auto-save failed', err);
+  } finally {
+    isSaving = false;
+  }
+}
+
+async function startRun({ savedGame = null } = {}) {
   if (starting) return;
   starting = true;
   try {
     checkBrowser();
     stopEmulator();
+    if (!savedGame) {
+      clearActiveState();
+    }
     setState('loading');
-    ui.loadingText.textContent = 'Loading the game';
+    ui.loadingText.textContent = savedGame ? 'Resuming your battle' : 'Loading the game';
     ui.loadingDetail.textContent = '';
     const files = await loadGameFiles((loaded, total) => {
       ui.meter.style.width = total ? `${Math.min(100, (loaded / total) * 100)}%` : '50%';
       ui.loadingDetail.textContent = total ? `${megabytes(loaded)} of ${megabytes(total)} MB` : `${megabytes(loaded)} MB`;
     });
 
-    runDate = today();
+    runDate = savedGame ? savedGame.date : today();
     stats = loadStats(); // another tab may have played meanwhile
     const fun = funRunSeed; // consume the one-shot rematch token
     funRunSeed = null;
-    runUnrecorded = fun != null || practiceSeed != null;
+    runUnrecorded = savedGame ? savedGame.runUnrecorded : (fun != null || practiceSeed != null);
     if (!runUnrecorded && resultFor(stats, runDate)) {
+      clearActiveState();
       renderTitle();
       setState('title');
       return;
     }
-    const seed = practiceSeed ?? fun ?? dailySeed(runDate);
-    const rom = practiceSeed
-      ? injectConfig(files.rom, { seed })
-      : injectConfig(files.rom, { seed, wins: stats.wins, battles: stats.wins + stats.losses, daily: true });
+    const seed = savedGame ? savedGame.seed : (practiceSeed ?? fun ?? dailySeed(runDate));
+    currentSeed = seed;
 
-    ui.loadingText.textContent = 'Starting the emulator';
+    const isPractice = practiceSeed != null || (savedGame && savedGame.isPractice);
+    const rom = isPractice
+      ? injectConfig(files.rom, { seed })
+      : injectConfig(files.rom, {
+          seed,
+          wins: savedGame ? savedGame.wins : stats.wins,
+          battles: savedGame ? savedGame.battles : (stats.wins + stats.losses),
+          daily: true,
+        });
+
+    ui.loadingText.textContent = savedGame ? 'Restoring the emulator' : 'Starting the emulator';
     ui.loadingDetail.textContent = '';
     ui.meter.style.width = '100%';
 
@@ -192,6 +233,7 @@ async function startRun() {
       element: canvas,
       size: { width: 720, height: 480 }, // render at 3x; CSS scales it to fit
       rom: { fileName: 'dailyred.gba', fileContent: new Blob([rom]) },
+      ...(savedGame?.stateBlob ? { state: savedGame.stateBlob } : {}),
       resolveCoreJs: () => files.coreJs,
       resolveCoreWasm: () => files.coreWasm,
       retroarchConfig: {
@@ -208,14 +250,28 @@ async function startRun() {
         // debugging tools in tests/ read the game's RAM.
         savestate_file_compression: false,
         savestate_thumbnail_enable: false,
+        savestate_auto_load: true,
       },
     });
 
+    const origSaveState = emu.saveState.bind(emu);
+    let inFlightSave = null;
+    emu.saveState = function() {
+      if (inFlightSave) return inFlightSave;
+      inFlightSave = origSaveState().finally(() => {
+        setTimeout(() => { inFlightSave = null; }, 100);
+      });
+      return inFlightSave;
+    };
+
     readGame = createGameLink(emu, seed);
-    battleSeen = false;
-    // Practice runs need no observation; hidden tabs pause below.
-    if (!practiceSeed) startPolling();
+    battleSeen = savedGame ? Boolean(savedGame.battleSeen) : false;
+    setActiveSession(true);
+    startPolling();
     setState('playing');
+    if (!savedGame) {
+      setTimeout(saveCurrentState, 1000);
+    }
   } catch (err) {
     console.error(err);
     stopEmulator();
@@ -232,6 +288,10 @@ async function startRun() {
 // result goes into the stats as soon as it's known, and when the game has
 // finished its closing messages we go back to the title card.
 function watchGame() {
+  if (app.dataset.state === 'playing' && emu && Date.now() - lastAutoSave >= 1500) {
+    saveCurrentState();
+  }
+
   let status;
   try {
     status = readGame?.();
@@ -247,8 +307,11 @@ function watchGame() {
   }
   if (runUnrecorded) return;
   if (status.phase >= PHASE.BATTLE) {
-    battleSeen = true;
-    markBattleStarted(stats, runDate);
+    if (!battleSeen) {
+      battleSeen = true;
+      markBattleStarted(stats, runDate);
+      saveCurrentState();
+    }
   } else if (battleSeen && status.result === RESULT.NONE) {
     // The game restarted mid-battle: that's a loss, like leaving the page.
     recordResult(stats, runDate, false);
@@ -261,6 +324,7 @@ function watchGame() {
 
 function endDailyGame(delayMs) {
   stopPolling();
+  clearActiveState();
   setTimeout(() => {
     stopEmulator();
     renderTitle();
@@ -355,12 +419,16 @@ window.addEventListener('keyup', (event) => {
 document.addEventListener('visibilitychange', () => {
   if (!emu) return;
   if (document.hidden) {
+    saveCurrentState();
     emu.pause();
     stopPolling();
   } else {
     emu.resume();
     startPolling();
   }
+});
+window.addEventListener('pagehide', () => {
+  saveCurrentState();
 });
 
 // Browsers start audio suspended unless it begins during a click; the
@@ -445,7 +513,32 @@ window.dailyRed = {
   audio: () => audioContexts.map((ctx) => ctx.state),
 };
 
-renderTitle();
-setState('title');
-showMuted();
-ui.fullscreen.hidden = !document.fullscreenEnabled; // e.g. iPhone Safari
+async function init() {
+  showMuted();
+  ui.fullscreen.hidden = !document.fullscreenEnabled; // e.g. iPhone Safari
+
+  const activeDay = today();
+  stats = settleAbandonedGame(loadStats(), activeDay);
+
+  const practice = practiceSeed != null;
+  if (hasActiveSession()) {
+    const saved = await loadActiveState(activeDay);
+    if (saved) {
+      const matchesMode = practice ? (saved.isPractice && saved.seed === practiceSeed) : !saved.isPractice;
+      if (matchesMode && (saved.runUnrecorded || (saved.date === activeDay && !resultFor(stats, activeDay)))) {
+        await startRun({ savedGame: saved });
+        return;
+      }
+    }
+  }
+
+  renderTitle();
+  setState('title');
+}
+
+if (hasActiveSession()) {
+  setState('loading');
+  ui.loadingText.textContent = 'Resuming your battle';
+}
+
+init();

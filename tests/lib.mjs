@@ -27,11 +27,13 @@ const CHROME_PATHS = [
   process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}/Google/Chrome/Application/chrome.exe`,
   process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}/Google/Chrome/Application/chrome.exe`,
   // Microsoft Edge speaks the same DevTools protocol, so it works as a fallback.
+  process.env.HOME && `${process.env.HOME}/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome`,
   process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}/Microsoft/Edge/Application/msedge.exe`,
   process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}/Microsoft/Edge/Application/msedge.exe`,
 ].filter(Boolean);
 
 export function findChrome() {
+  if (process.env.CHROME_PATH && existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
   const path = CHROME_PATHS.find((p) => existsSync(p));
   if (!path) throw new Error('Google Chrome not found. Set CHROME_PATH to a Chrome/Chromium binary.');
   return path;
