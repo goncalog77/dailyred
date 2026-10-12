@@ -1,0 +1,9 @@
+# Local build outputs: the Vercel build recreates all of these with
+# scripts/vercel-build.sh, so they must not be uploaded.
+.toolchain/
+pokefirered/
+web/vendor/
+web/game/
+tests/node_modules/
+tests/output/
+.wrangler/

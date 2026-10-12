@@ -1,7 +1,6 @@
 // Shared helpers for the headless browser tests: a static server, Chrome via
 // playwright-core, booting the real ROM through the same emulator the website
 // uses, pressing buttons, and reading game RAM out of a save state.
-import { chromium } from 'playwright-core';
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -13,9 +12,23 @@ export const ELF = join(GAME_DIR, 'pokefirered_modern.elf');
 
 const CHROME_PATHS = [
   process.env.CHROME_PATH,
+  // macOS
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  // Linux
+  '/usr/bin/google-chrome-stable',
   '/usr/bin/google-chrome',
   '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/snap/bin/chromium',
+  '/opt/google/chrome/chrome',
+  // Windows
+  process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}/Google/Chrome/Application/chrome.exe`,
+  process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}/Google/Chrome/Application/chrome.exe`,
+  process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}/Google/Chrome/Application/chrome.exe`,
+  // Microsoft Edge speaks the same DevTools protocol, so it works as a fallback.
+  process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}/Microsoft/Edge/Application/msedge.exe`,
+  process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}/Microsoft/Edge/Application/msedge.exe`,
 ].filter(Boolean);
 
 export function findChrome() {
@@ -36,6 +49,7 @@ export async function startServer() {
 }
 
 export async function launchBrowser() {
+  const { chromium } = await import('playwright-core');
   return chromium.launch({
     executablePath: findChrome(),
     headless: true,
@@ -125,12 +139,26 @@ export async function readMemory(page) {
   };
 }
 
-// Symbol addresses from the built ELF (needs the toolchain from setup-macos.sh).
+// Symbol addresses from the built ELF (needs the toolchain from scripts/setup.sh).
 let symbolCache;
+
+// arm-none-eabi-nm: prefer the project toolchain, tolerating Windows' .exe
+// suffix, then fall back to one installed on PATH (e.g. a distro package).
+function nmBinary() {
+  const base = join(ROOT, '.toolchain/arm-none-eabi/bin/arm-none-eabi-nm');
+  if (existsSync(base)) return base;
+  if (existsSync(`${base}.exe`)) return `${base}.exe`;
+  return 'arm-none-eabi-nm';
+}
+
 export function symbols() {
   if (symbolCache) return symbolCache;
-  const nm = join(ROOT, '.toolchain/arm-none-eabi/bin/arm-none-eabi-nm');
-  const out = execFileSync(existsSync(nm) ? nm : 'arm-none-eabi-nm', [ELF], { encoding: 'utf8', maxBuffer: 64 << 20 });
+  let out;
+  try {
+    out = execFileSync(nmBinary(), [ELF], { encoding: 'utf8', maxBuffer: 64 << 20 });
+  } catch {
+    throw new Error(`Could not read symbols from ${ELF}. Build the ROM first (scripts/setup.sh, then scripts/build-rom.sh).`);
+  }
   symbolCache = new Map();
   for (const line of out.split('\n')) {
     const [addr, , name] = line.trim().split(/\s+/);

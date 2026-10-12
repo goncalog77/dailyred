@@ -81,6 +81,10 @@ try {
 
   await page.click('#play');
   await attach(page);
+  await page.keyboard.press('q'); // trusted input: fires the site's audio-resume handler
+  await sleep(500);
+  const audio = await page.evaluate(() => window.dailyRed.audio());
+  check(audio.length >= 1 && audio.every((s) => s === 'running'), `emulator audio is running (${audio.join(', ') || 'no audio contexts'})`);
   const box = await page.locator('canvas').boundingBox();
   check(Math.round(box.width) === 720 && Math.round(box.height) === 480, `game screen is 720x480 on desktop (got ${box.width}x${box.height})`);
   const team1 = JSON.stringify(readParty((await getStatus(page)).mem).party.map((m) => m.species));
@@ -99,6 +103,8 @@ try {
   await sleep(1000);
   s = await shown(page);
   check(!s.canPlay && s.wins === '1', 'reloading the same day keeps it locked, stats saved');
+  const cacheKeys = await page.evaluate(async () => { try { return await caches.keys(); } catch { return []; } });
+  check(cacheKeys.some((k) => k.startsWith('dailyred-')), `game files persist in the Cache API (${cacheKeys.join(', ') || 'none'})`);
 
   // Same team for everyone today: a second browser gets the same Pokemon.
   const other = await browser.newContext();
@@ -196,13 +202,13 @@ try {
   // A failed download shows the error card, and Try again recovers.
   const brokenContext = await browser.newContext();
   const broken = await brokenContext.newPage();
-  await broken.route('**/game/dailyred.gba.gz', (route) => route.fulfill({ status: 404, body: 'missing' }));
+  await broken.route('**/game/*.gba.gz', (route) => route.fulfill({ status: 404, body: 'missing' }));
   await broken.goto(server.url);
   await broken.click('#play');
   await broken.waitForFunction(() => document.querySelector('.app').dataset.state === 'error');
   const message = await broken.locator('#error-text').textContent();
   check(message.includes('HTTP 404'), `download failure shows an error ("${message}")`);
-  await broken.unroute('**/game/dailyred.gba.gz');
+  await broken.unroute('**/game/*.gba.gz');
   await broken.click('#retry');
   await attach(broken);
   check(true, 'Try again starts the game after the error');

@@ -1,6 +1,6 @@
 # Everything below is recreated by the scripts in scripts/ (see README).
 
-# scripts/setup-macos.sh
+# scripts/setup.sh
 /.toolchain/
 # scripts/get-pokefirered.sh (pret/pokefirered + patches/)
 /pokefirered/
@@ -13,5 +13,6 @@
 /.wrangler/
 
 /tests/node_modules/
+/node_modules/
 /tests/output/
 .DS_Store

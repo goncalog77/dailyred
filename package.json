@@ -1,0 +1,15 @@
+{
+  "name": "dailyred",
+  "private": true,
+  "description": "A daily Pokémon battle in the browser (see README.md)",
+  "packageManager": "pnpm@10.23.0",
+  "scripts": {
+    "build": "bash scripts/vercel-build.sh",
+    "start": "bash scripts/start.sh",
+    "smoke": "pnpm --filter dailyred-tests smoke",
+    "site": "pnpm --filter dailyred-tests site",
+    "teams": "pnpm --filter dailyred-tests teams",
+    "test": "pnpm --filter dailyred-tests test",
+    "test:all": "pnpm --filter dailyred-tests test:all"
+  }
+}

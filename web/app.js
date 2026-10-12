@@ -142,7 +142,7 @@ async function startRun() {
     checkBrowser();
     stopEmulator();
     setState('loading');
-    ui.loadingText.textContent = 'Downloading the game';
+    ui.loadingText.textContent = 'Loading the game';
     ui.loadingDetail.textContent = '';
     const files = await loadGameFiles((loaded, total) => {
       ui.meter.style.width = total ? `${Math.min(100, (loaded / total) * 100)}%` : '50%';
@@ -349,6 +349,9 @@ dpad.addEventListener('pointercancel', () => setDirection(null));
 window.dailyRed = {
   get emulator() { return emu; },
   get stats() { return { ...stats }; },
+  // AudioContext states ('running', 'suspended'...) for the emulator's
+  // contexts, so the tests can check the audio pipeline is alive.
+  audio: () => audioContexts.map((ctx) => ctx.state),
 };
 
 renderTitle();

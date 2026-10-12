@@ -16,6 +16,8 @@ fi
 
 git init -q "$GAME"
 git -C "$GAME" remote add origin "$PRET_URL"
+# The decomp's build tools expect LF line endings; keep them on Windows too.
+git -C "$GAME" config core.autocrlf false
 echo ">> Fetching pret/pokefirered @ ${PRET_COMMIT:0:10}"
 git -C "$GAME" fetch -q --depth 1 origin "$PRET_COMMIT"
 git -C "$GAME" checkout -q FETCH_HEAD

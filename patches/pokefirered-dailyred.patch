@@ -41,11 +41,10 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..1f58c16d04902d3dd22e74a8bb1d6f0839f22ae6
 GIT binary patch
 literal 950
-zcmeH@IS#@=3`IMC))2uEv4l%F5>lu*9GA#RasULh2q=Jx^&Z$WBq9h>Q=s2uJTLEC
-zlT!N6Z@<7eEyM$&7K*d?lZPcyw4yRj8Ap|I9iiql;{~m#`?a-$IVD0Rv?!(4yyXM$
-zc*CDvKBfq<7e;gBk(}FwRwX7dZ<Im&Li$1s5J*Ct_-u0#mrjO4s?jlOGUy?Z?OpnI
-z5<j_#{E@k?bjx$6%oT{w*f!^?pqi)lbZM)xCT-Kr>S*L?+O6~^mamLZTaj}2YBG2L
-DcJ3<K
+zcmeH@IS#@w5JkKBtN{^Yv0h@3ken)q;}SUu2Z#bK0t!OKdJi;qun2<G6zEr;d3xXW
+zl9vDc_7BX<34mD#<=Oiwz=~+LrYcStM^$klR+Q3$Gg?#sYio#<5?XLVStYgM9p}8~
+zEq``(5o3Y_=Qc;4B1W&&DntbJMk$yVvWo~KXlP7u;<L?#r*<-iu|~&;NnwD5o*CMS
+zDYyvQyRLNexs%w%rD33Kn{(Ar_h}R^A(b^ro7}94mQTCb%Nw*O#8#%<UQ7xPcJ3<K
 
 literal 0
 HcmV?d00001
@@ -75,7 +74,7 @@ index 41d0eb1..00b884c 100644
  }
 diff --git a/data/maps/DailyRed_Summit/map.json b/data/maps/DailyRed_Summit/map.json
 new file mode 100644
-index 0000000..6317762
+index 0000000..dd5e261
 --- /dev/null
 +++ b/data/maps/DailyRed_Summit/map.json
 @@ -0,0 +1,37 @@
@@ -88,9 +87,9 @@ index 0000000..6317762
 +  "requires_flash": false,
 +  "weather": "WEATHER_SNOW",
 +  "map_type": "MAP_TYPE_ROUTE",
-+  "allow_cycling": false,
++  "allow_cycling": true,
 +  "allow_escaping": false,
-+  "allow_running": false,
++  "allow_running": true,
 +  "show_map_name": false,
 +  "floor_number": 0,
 +  "battle_scene": "MAP_BATTLE_SCENE_NORMAL",
@@ -436,14 +435,15 @@ index 6d62084..44f97e4 100644
      DoTrainerBattle();
 diff --git a/src/dailyred.c b/src/dailyred.c
 new file mode 100644
-index 0000000..1ec6e68
+index 0000000..7b9c933
 --- /dev/null
 +++ b/src/dailyred.c
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,228 @@
 +#include "global.h"
 +#include "gflib.h"
 +#include "dailyred.h"
 +#include "event_data.h"
++#include "help_system.h"
 +#include "load_save.h"
 +#include "m4a.h"
 +#include "main.h"
@@ -605,7 +605,13 @@ index 0000000..1ec6e68
 +void DailyRed_InitNewGame(void)
 +{
 +    FlagSet(FLAG_SYS_POKEMON_GET); // shows POKeMON in the start menu
++    FlagSet(FLAG_SYS_B_DASH);      // running shoes: hold B to run on the summit
 +    EnableNationalPokedex();       // so Gen 2/3 Pokemon show national dex numbers
++    // L/R keep their in-game uses (list scrolling) but never open FireRed's
++    // built-in help, which describes the normal game. The Options menu keeps
++    // this locked (option_menu.c), like the SET battle style.
++    HelpSystem_Disable();
++    gSaveBlock2Ptr->optionsButtonMode = OPTIONS_BUTTON_MODE_LR;
 +    // Start the record from the website's saved stats (0 outside the website).
 +    VarSet(VAR_DAILYRED_WINS, *(const vu16 *)&gDailyRedRomConfig.wins);
 +    VarSet(VAR_DAILYRED_BATTLES, *(const vu16 *)&gDailyRedRomConfig.battles);
@@ -1403,16 +1409,19 @@ index 08c0320..49a183f 100644
          PutWindowTilemap(sStartMenuWindowId);
      }
 diff --git a/src/option_menu.c b/src/option_menu.c
-index 0b55a34..c1eed9d 100644
+index 0b55a34..de86006 100644
 --- a/src/option_menu.c
 +++ b/src/option_menu.c
-@@ -412,6 +412,10 @@ static u8 OptionMenu_ProcessInput(void)
+@@ -412,6 +412,13 @@ static u8 OptionMenu_ProcessInput(void)
  { 
      u16 current;
      u16 *curr;
 +    // Daily Red: Battle Style is locked to SET, so there's no free switch
-+    // when one of RED's Pokemon faints.
-+    if (sOptionMenuPtr->cursorPos == MENUITEM_BATTLESTYLE && JOY_REPT(DPAD_LEFT | DPAD_RIGHT))
++    // when one of RED's Pokemon faints. Button Mode is locked to LR, so L/R
++    // never open FireRed's built-in help (set in DailyRed_InitNewGame).
++    if ((sOptionMenuPtr->cursorPos == MENUITEM_BATTLESTYLE
++         || sOptionMenuPtr->cursorPos == MENUITEM_BUTTONMODE)
++        && JOY_REPT(DPAD_LEFT | DPAD_RIGHT))
 +        return 0;
      if (JOY_REPT(DPAD_RIGHT))
      {

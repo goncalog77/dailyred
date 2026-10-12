@@ -25,6 +25,8 @@ const VAR_BATTLES = define('include/constants/vars.h', 'VAR_DAILYRED_BATTLES');
 const VAR_WINS = define('include/constants/vars.h', 'VAR_DAILYRED_WINS');
 const TERRAIN_MOUNTAIN = define('include/constants/battle.h', 'BATTLE_TERRAIN_MOUNTAIN');
 const STYLE_SET = define('include/constants/global.h', 'OPTIONS_BATTLE_STYLE_SET');
+const BUTTON_MODE_LR = 1; // OPTIONS_BUTTON_MODE_LR (include/constants/global.h)
+const FLAG_SYS_B_DASH = 0x82F; // SYS_FLAGS + 0x2F (include/constants/flags.h)
 const LOCALID_RED = define('include/constants/map_event_ids.h', 'LOCALID_DAILYRED_RED');
 const DIR_NORTH = define('include/constants/global.h', 'DIR_NORTH');
 const SPECIES_PIKACHU = define('include/constants/species.h', 'SPECIES_PIKACHU');
@@ -126,6 +128,15 @@ try {
   check(s.x === START[0] && s.y === START[1], `player starts at ${START} (got ${s.x},${s.y})`);
   check(redFacing(s.mem) === DIR_NORTH, 'RED faces away from the player, out over the drop');
   check(optionsBattleStyle(s.mem) === STYLE_SET, 'battle style starts as SET');
+  // Daily Red fixes: no L/R help screen, running shoes on the summit.
+  check(s.mem.read(symbol('gHelpSystemEnabled'), 1)[0] === 0, "FireRed's built-in help is off");
+  const saveBlock2 = s.mem.read(symbol('gSaveBlock2Ptr'), 4).readUInt32LE(0);
+  check(s.mem.read(saveBlock2 + 0x13, 1)[0] === BUTTON_MODE_LR, 'button mode is LR (L/R never open the help)');
+  const saveBlock1 = s.mem.read(symbol('gSaveBlock1Ptr'), 4).readUInt32LE(0);
+  check((s.mem.read(saveBlock1 + 0x0EE0 + (FLAG_SYS_B_DASH >> 3), 1)[0] & (1 << (FLAG_SYS_B_DASH & 7))) !== 0, 'running shoes work (FLAG_SYS_B_DASH is set)');
+  const mapHeader = symbol('gMapHeader');
+  check(s.mem.read(mapHeader + 0x18, 1)[0] !== 0, 'the summit allows cycling');
+  check((s.mem.read(mapHeader + 0x19, 1)[0] & 0x02) !== 0, 'the summit allows running');
   await sleep(1500);
   await screenshot(page, `${OUT}/01-start.png`);
   await press(page, 'start'); await sleep(800);
@@ -154,10 +165,16 @@ try {
   await press(page, 'left'); await sleep(300);
   await press(page, 'left'); await sleep(500);
   await screenshot(page, `${OUT}/08-options.png`);
+  await press(page, 'down'); await sleep(300);
+  await press(page, 'down'); await sleep(300);
+  await press(page, 'right'); await sleep(300);
+  await press(page, 'left'); await sleep(500);
   await press(page, 'b'); await sleep(2500);
   await press(page, 'b'); await sleep(1000);
   s = await waitFor(page, (st) => st.inOverworld, { what: 'back from the options' });
   check(optionsBattleStyle(s.mem) === STYLE_SET, "the Options menu can't switch battle style away from SET");
+  const saveBlock2After = s.mem.read(symbol('gSaveBlock2Ptr'), 4).readUInt32LE(0);
+  check(s.mem.read(saveBlock2After + 0x13, 1)[0] === BUTTON_MODE_LR, "the Options menu can't switch button mode away from LR");
 
   // 3. Climb to RED -> trainer battle on the peak. Force a win.
   s = await talkToRed(page);
@@ -271,6 +288,10 @@ try {
     await sleep(600);
   }
   s = await waitFor(page, (st) => st.inOverworld, { what: 'overworld after the title screen' });
+  await press(page, 'l'); await sleep(800);
+  await press(page, 'r'); await sleep(800);
+  s = await getStatus(page);
+  check(s.inOverworld, "L/R don't open the help screen on the no-seed path either");
   await sleep(1000);
   await screenshot(page, `${OUT}/13-no-seed-start.png`);
   checkTeam('team without a seed', readParty(s.mem));

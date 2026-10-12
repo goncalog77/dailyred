@@ -23,29 +23,46 @@ FONT_LICENSE_URL="https://raw.githubusercontent.com/google/fonts/main/ofl/pixeli
 
 check() { # file sha
   local actual
-  actual="$(shasum -a 256 "$1" | awk '{print $1}')"
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$1" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$1" | awk '{print $1}')"
+  else
+    echo "No SHA-256 tool found (need sha256sum or shasum)."; exit 1
+  fi
   [ "$actual" = "$2" ] || { echo "Checksum mismatch: $1 ($actual)"; exit 1; }
+}
+
+extract_zip() { # file destdir (unzip, or Python 3 when unzip is missing)
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -oq "$1" -d "$2"
+  else
+    python3 - "$1" "$2" <<'EOF'
+import sys, zipfile
+zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
+EOF
+  fi
 }
 
 mkdir -p "$VENDOR"
 
 echo ">> Nostalgist $NOSTALGIST_VER"
-curl -fsSL -o "$TMP/nostalgist.tgz" "https://registry.npmjs.org/nostalgist/-/nostalgist-$NOSTALGIST_VER.tgz"
+curl -fSL --retry 3 -o "$TMP/nostalgist.tgz" "https://registry.npmjs.org/nostalgist/-/nostalgist-$NOSTALGIST_VER.tgz"
 check "$TMP/nostalgist.tgz" "$NOSTALGIST_SHA"
 tar -xzf "$TMP/nostalgist.tgz" -C "$TMP"
 cp "$TMP/package/dist/nostalgist.js" "$VENDOR/nostalgist.js"
 cp "$TMP/package/license" "$VENDOR/nostalgist.LICENSE.txt"
 
 echo ">> mGBA core ($CORE_REL)"
-curl -fsSL -o "$TMP/mgba.zip" \
+curl -fSL --retry 3 -o "$TMP/mgba.zip" \
   "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@$CORE_REL/retroarch/mgba_libretro.zip"
 check "$TMP/mgba.zip" "$CORE_SHA"
-unzip -oq "$TMP/mgba.zip" -d "$VENDOR"
+extract_zip "$TMP/mgba.zip" "$VENDOR"
 
 echo ">> Pixelify Sans"
-curl -fsSL -o "$TMP/font.woff2" "$FONT_URL"
+curl -fSL --retry 3 -o "$TMP/font.woff2" "$FONT_URL"
 check "$TMP/font.woff2" "$FONT_SHA"
 cp "$TMP/font.woff2" "$VENDOR/pixelify-sans.woff2"
-curl -fsSL -o "$VENDOR/pixelify-sans.OFL.txt" "$FONT_LICENSE_URL"
+curl -fSL --retry 3 -o "$VENDOR/pixelify-sans.OFL.txt" "$FONT_LICENSE_URL"
 
 ls -la "$VENDOR"

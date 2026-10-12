@@ -1,13 +1,54 @@
 // Downloads the ROM and the emulator core once per visit and keeps them in
 // memory, so starting a new run only has to restart the emulator.
+//
+// Repeat visits download almost nothing: the core files are pinned versions
+// (see scripts/fetch-vendor.sh), so they live in the Cache API indefinitely,
+// and the ROM URL comes from a tiny manifest that build-rom.sh rewrites on
+// every build — a fresh manifest entry means a fresh ROM, the same entry
+// means a cache hit. If the Cache API is unavailable everything still works,
+// just with a download on every visit.
+const MANIFEST_URL = 'game/manifest.json';
 
-const FILES = {
-  rom: 'game/dailyred.gba.gz',
-  coreJs: 'vendor/mgba_libretro.js',
-  coreWasm: 'vendor/mgba_libretro.wasm',
-};
+// Bump this when the pinned versions in scripts/fetch-vendor.sh change, so
+// the core files are fetched again.
+const CACHE_NAME = 'dailyred-vendor-v1';
 
 let cached = null;
+
+function cacheKey(url) {
+  return new URL(url, location.href).href;
+}
+
+async function openCache() {
+  try {
+    return 'caches' in window ? await caches.open(CACHE_NAME) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fetches url, serving it from the persistent cache when possible. Throws the
+// same download error the site shows when the network fails.
+async function cachedFetch(cache, url, fetchOptions) {
+  if (cache) {
+    try {
+      const hit = await cache.match(cacheKey(url));
+      if (hit) return hit;
+    } catch {
+      // Fall through to the network.
+    }
+  }
+  const res = await fetch(url, fetchOptions);
+  if (!res.ok) throw new Error(`Couldn't download ${url} (HTTP ${res.status}).`);
+  if (cache) {
+    try {
+      await cache.put(cacheKey(url), res.clone());
+    } catch {
+      // The game still starts; it just downloads again next visit.
+    }
+  }
+  return res;
+}
 
 // onProgress(loadedBytes, totalBytes) — totalBytes is 0 when unknown.
 export function loadGameFiles(onProgress = () => {}) {
@@ -19,11 +60,15 @@ export function loadGameFiles(onProgress = () => {}) {
 }
 
 async function download(onProgress) {
-  const responses = await Promise.all(Object.values(FILES).map(async (url) => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Couldn't download ${url} (HTTP ${res.status}).`);
-    return res;
-  }));
+  const cache = await openCache();
+  // Always revalidate the manifest (bytes, not megabytes): it names the
+  // current ROM build, so a rebuild is picked up on the next visit.
+  const manifestRes = await cachedFetch(null, MANIFEST_URL, { cache: 'no-store' });
+  const { rom } = await manifestRes.json();
+  if (typeof rom !== 'string' || !rom) throw new Error(`Couldn't download ${MANIFEST_URL} (bad manifest).`);
+  const urls = { rom: `game/${rom}`, coreJs: 'vendor/mgba_libretro.js', coreWasm: 'vendor/mgba_libretro.wasm' };
+
+  const responses = await Promise.all(Object.values(urls).map((url) => cachedFetch(cache, url)));
 
   // Content-Length is only meaningful when the host didn't re-encode the file.
   const sizes = responses.map((r) => (r.headers.get('Content-Encoding') ? 0 : Number(r.headers.get('Content-Length')) || 0));

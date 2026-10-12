@@ -24,16 +24,32 @@ const types = {
 
 const server = createServer(async (req, res) => {
   try {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+      return;
+    }
     const url = new URL(req.url, 'http://localhost');
     let path = normalize(join(root, decodeURIComponent(url.pathname)));
     if (!path.startsWith(root)) throw Object.assign(new Error('forbidden'), { code: 'EACCES' });
     if ((await stat(path)).isDirectory()) path = join(path, 'index.html');
-    const body = await readFile(path);
+    const st = await stat(path);
+    // Weak ETag from size + mtime: repeat visits revalidate and get a 304
+    // with no body instead of downloading the file again.
+    const etag = `W/"${st.size.toString(16)}-${Number(st.mtimeMs).toString(16)}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+      res.end();
+      return;
+    }
     res.writeHead(200, {
       'Content-Type': types[extname(path)] || 'application/octet-stream',
       'Cache-Control': 'no-cache',
+      'Content-Length': st.size,
+      ETag: etag,
     });
-    res.end(body);
+    if (req.method === 'GET') res.end(await readFile(path));
+    else res.end();
   } catch (err) {
     res.writeHead(err.code === 'EACCES' ? 403 : 404, { 'Content-Type': 'text/plain' });
     res.end('Not found');

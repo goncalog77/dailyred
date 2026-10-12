@@ -12,31 +12,51 @@ small set of source changes, built into a GBA ROM and played in the browser
 through the mGBA emulator compiled to WebAssembly. Nothing about battles is
 reimplemented in JavaScript.
 
-- [Quick start (macOS)](#quick-start-macos)
+- [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Team generation](#team-generation)
 - [RED's team](#reds-team)
 - [Development workflow](#development-workflow)
 - [Testing and debugging](#testing-and-debugging)
 - [Running it locally](#running-it-locally)
+- [Deploy on Vercel](#deploy-on-vercel)
 - [Copyright and licenses](#copyright-and-licenses)
 - [Known limitations](#known-limitations)
 
-## Quick start (macOS)
+## Quick start
 
-You need the Xcode Command Line Tools (`xcode-select --install`), Node.js 18+
-and git. No Homebrew, no `sudo`, and **no ROM**: the decompilation builds the
-whole game from source.
+You need Node.js 18+, git, and a native C toolchain (compiler, `make`,
+`curl`, `unzip`). No **ROM**: the decompilation builds the whole game from
+source.
+
+- **macOS:** the Xcode Command Line Tools (`xcode-select --install`).
+- **Linux:** e.g. `sudo apt install build-essential` (Debian/Ubuntu),
+  `sudo dnf install gcc make` (Fedora) or `sudo pacman -S base-devel`
+  (Arch).
+- **Windows:** run the commands below from Git Bash (ships with
+  [Git for Windows](https://git-scm.com/)) or WSL2, with a native C compiler
+  available (e.g. MSYS2's `pacman -S base-devel`).
 
 ```sh
-scripts/setup-macos.sh      # ARM cross-compiler + libpng into .toolchain/ (~1 GB, one time)
+scripts/start.sh              # everything below, then open http://localhost:8080
+```
+
+That one command installs the toolchain, fetches the game source and vendor
+files (skipping steps that are already done), rebuilds the ROM and serves the
+site. Pass a port to use another one: `scripts/start.sh 3000`. The same steps
+manually:
+
+```sh
+scripts/setup.sh            # ARM cross-compiler + libpng into .toolchain/ (~1 GB, one time)
 scripts/get-pokefirered.sh  # pret/pokefirered at a pinned commit + patches/
 scripts/fetch-vendor.sh     # emulator, emulator core and font into web/vendor/
-scripts/build-rom.sh        # builds the ROM, writes web/game/dailyred.gba.gz
+scripts/build-rom.sh        # builds the ROM, writes web/game/dailyred.<hash>.gba.gz
 node scripts/serve.mjs      # open http://localhost:8080
 ```
 
-`setup-macos.sh` picks the right compiler for Intel or Apple Silicon Macs.
+`setup.sh` picks the right compiler archive for your OS and CPU
+(Intel / Apple Silicon Macs, x86_64 / ARM Linux, 64-bit Windows).
+(`scripts/setup-macos.sh` still works as an alias for it.)
 
 ## How it works
 
@@ -44,7 +64,7 @@ node scripts/serve.mjs      # open http://localhost:8080
 pret/pokefirered @ 037335f + patches/  ──make modern──▶  pokefirered_modern.gba
                                                               │ gzip (16 MB → 5.5 MB)
 web/ (static files)                                           ▼
-  index.html + app.js ── fetch ──▶ game/dailyred.gba.gz, vendor/mgba_libretro.wasm
+  index.html + app.js ── fetch ──▶ game/manifest.json → game/dailyred.<hash>.gba.gz, vendor/mgba_libretro.wasm
         │  writes the day's seed + your record into the ROM bytes (rom-config.js)
         ▼
   Nostalgist.js ──▶ RetroArch + mGBA core (WebAssembly) ──▶ <canvas>
@@ -267,15 +287,33 @@ website uses, press buttons, and read game RAM out of emulator save states
 (mGBA's state contains a raw copy of RAM).
 
 ```sh
-cd tests
-npm install        # playwright-core only; it drives your installed Google Chrome
-npm run smoke      # the game loop (~3 min)
-npm run site       # the website on desktop and phone (~1 min)
-npm run teams -- 1 2 3            # print + validate the teams for these seeds
-npm run teams -- --random 40      # 40 random seeds
+pnpm install     # playwright-core only; it drives your installed Google Chrome
+pnpm test:all    # every suite: smoke + site + teams on 10 random seeds
+pnpm smoke       # the game loop (~3 min)
+pnpm site        # the website on desktop and phone (~1 min)
+pnpm teams -- 1 2 3            # print + validate the teams for these seeds
+pnpm teams -- --random 40      # 40 random seeds
 ```
 
-`npm run smoke` checks that:
+`pnpm test:all` runs all three suites in one command and checks the
+prerequisites first (built ROM, `web/vendor/` files, Chrome, `pnpm install`),
+telling you exactly which setup step to run when something is missing:
+
+```sh
+pnpm test:all -- --teams-random 40   # thorough team check
+node tests/test-all.mjs --skip-site --teams-random 5
+node tests/test-all.mjs --help                # all options
+```
+
+The tests need Google Chrome (or Chromium / Edge on Windows). The usual
+install locations are detected automatically; otherwise point at your binary
+with `CHROME_PATH`:
+
+```sh
+CHROME_PATH=/path/to/chrome pnpm test:all
+```
+
+`pnpm smoke` checks that:
 - each seed's team is valid: 6 different real Gen 1–3 species with a combined
   base stat total of at least 2700 and at most one legendary, level 100, full
   HP, IVs 25–31, EVs exactly as `AssignFocusedEVs` would place them (checked
@@ -290,6 +328,8 @@ npm run teams -- --random 40      # 40 random seeds
 - battle style is SET from the start, the Options menu can't change it, and
   when one of RED's Pokémon is knocked out he sends the next one with no
   "Will LEAF change POKéMON?" prompt.
+- L/R never open FireRed's built-in help (button mode is LR from the start
+  and the Options menu can't change it), and holding B runs on the summit.
 - RED's in-battle party is the configured team with IVs, items and EVs.
 - a win and a loss are each handled: no white-out, counters updated, and a new
   valid team afterwards.
@@ -302,8 +342,9 @@ The win and loss are forced by editing HP values in a save state, which makes
 them quick and deterministic. Screenshots of every step are saved in
 `tests/output/`.
 
-`npm run site` plays the daily game over five faked days (Playwright's clock):
-a fresh visitor, a win (stats, locked until tomorrow, countdown, survives a
+`pnpm site` plays the daily game over five faked days (Playwright's clock):
+a fresh visitor, emulator audio running after a key press, game files cached
+for repeat visits, a win (stats, locked until tomorrow, countdown, survives a
 reload), the same team in a second browser that day, a loss the next day,
 leaving mid-battle (counts as a loss), a missed day (streaks reset), and a
 practice run (`?seed=`, not recorded). It also checks the 3× (720×480)
@@ -321,18 +362,35 @@ instance and `dailyRed.stats` shows your saved stats.
 
 Daily Red is meant to be played on your own computer. After the quick start,
 `web/` holds the whole site (about 9 MB), and `node scripts/serve.mjs` serves
-it at http://localhost:8080:
+it at http://localhost:8080. Repeat visits download almost nothing: the
+emulator core is pinned, so it lives in the Cache API indefinitely, and the
+ROM's content hash is in its filename — the site revalidates the tiny
+`manifest.json` and only downloads the ROM when a rebuild changed it.
 
 ```
 web/index.html  app.js  daily.js  game-link.js  game-files.js  rom-config.js  style.css  favicon.svg  licenses.txt
 web/vendor/     emulator (3.4 MB) + font
-web/game/       dailyred.gba.gz (5.5 MB), built on your machine
+web/game/       dailyred.<hash>.gba.gz (5.5 MB) + manifest.json, built on your machine
 ```
 
 To use another port, pass it: `node scripts/serve.mjs 3000`. Your stats are
 saved in the browser for that address, so keep using the same port to keep
 your streaks. After rebuilding the ROM (`scripts/build-rom.sh`), reload the
 page.
+
+## Deploy on Vercel
+
+The site is static files plus a build: push this repo to Vercel (dashboard →
+Add New → Project → Import) and it builds and hosts itself. `vercel.json`
+runs `scripts/vercel-build.sh` (toolchain + game source + vendor files + ROM,
+all into `web/`), publishes `web/`, and sets long-lived caching on the
+versioned vendor/core files while keeping `manifest.json` fresh. The first
+deploy takes several minutes (the ARM toolchain is a ~280 MB download); later
+deploys reuse nothing and rebuild from scratch, so expect the same each time.
+No environment variables are needed. Your battle stats still live in each
+visitor's browser (localStorage), not on the server.
+
+To verify the exact deploy build locally first: `pnpm build`.
 
 ## Copyright and licenses
 
@@ -351,8 +409,9 @@ footer links to it.
 
 ## Known limitations
 
-- **Movement:** running shoes and the bike are off on the summit; it's only
-  a few steps to the top.
+- **Movement:** hold B to run on the summit. There's no bike (no bag or
+  items in this game), and running shoes were made for longer routes — the top
+  is only a few steps away.
 - **Stats live in the browser:** clearing site data resets them, they don't
   follow you to another device or browser, and anyone can edit their own
   localStorage. That's fine for a casual daily game; there's no server.
@@ -361,24 +420,31 @@ footer links to it.
 - **Soft reset** (A+B+Start+Select) is turned off in the daily game, so a
   losing battle can't be restarted. (If the game ever restarts mid-battle
   anyway, the site counts it as a loss.)
-- **Audio** can't be checked by the headless tests. Browsers start audio
-  suspended unless it begins during a click, so the game resumes it on the
-  next key press or tap.
-- **Tested environment:** macOS with Google Chrome (headless, desktop and
-  phone emulation). Not yet tried on Safari, Firefox or real phones.
-- The L/R buttons still open FireRed's built-in help, which describes the
-  normal game.
+- **Audio** starts suspended unless it begins during a click, so the game
+  resumes it on the next key press or tap. The site test checks the emulator's
+  audio is running after input.
+- **Tested environment:** Google Chrome (headless, desktop and phone
+  emulation). Not yet tried on Safari, Firefox or real phones.
+- The toolchain scripts (`setup.sh`, `build-rom.sh`, `fetch-vendor.sh`) support
+  macOS, Linux and Windows (Git Bash or WSL2); the browser tests additionally
+  need Chrome/Chromium (see `CHROME_PATH` above).
 
 ## Project layout
 
 ```
+package.json                       pnpm workspace root (build/start/test scripts)
+pnpm-workspace.yaml                workspace: tests/
+vercel.json                        Vercel: build web/ via scripts/vercel-build.sh
 patches/pokefirered-dailyred.patch   all changes to pret/pokefirered
-scripts/setup-macos.sh               toolchain (xPack arm-none-eabi-gcc 14.2.1 + libpng)
+scripts/setup.sh                   toolchain (xPack arm-none-eabi-gcc 14.2.1 + libpng)
+                                   (macOS, Linux, Windows via Git Bash/WSL; setup-macos.sh is an alias)
 scripts/get-pokefirered.sh           pinned upstream checkout + patch
 scripts/save-patch.sh                pokefirered/ changes → patches/
-scripts/build-rom.sh                 make modern → web/game/dailyred.gba.gz
+scripts/start.sh                     one-command local run: setup → build → serve on localhost
+scripts/build-rom.sh                 make modern → web/game/dailyred.<hash>.gba.gz + manifest.json
 scripts/fetch-vendor.sh              Nostalgist, mGBA core, font (pinned, checksummed)
 scripts/serve.mjs                    local static server
+scripts/vercel-build.sh              Vercel build: setup → fetch → build into web/
 web/                                 the website
 tests/                               headless browser tests and the teams tool
 ```
