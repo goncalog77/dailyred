@@ -3,6 +3,7 @@
 // ROM; this file starts it with the day's seed, watches for the result, and
 // keeps the stats (see daily.js).
 import { Nostalgist } from './vendor/nostalgist.js';
+import { inject as injectAnalytics } from './vendor/vercel-analytics.js';
 import { loadGameFiles } from './game-files.js';
 import { injectConfig, parseSeed } from './rom-config.js';
 import { createGameLink, PHASE, RESULT } from './game-link.js';
@@ -177,6 +178,10 @@ async function startRun() {
       resolveCoreWasm: () => files.coreWasm,
       retroarchConfig: {
         audio_mute_enable: muted,
+        // Enter, Escape and Space are handled below through the emulator
+        // API, so Enter must not keep its built-in Start binding (one key
+        // must not press two buttons at once). "nul" is RetroArch's unbound.
+        input_player1_start: 'nul',
         // The site never makes save states itself; uncompressed ones let the
         // debugging tools in tests/ read the game's RAM.
         savestate_file_compression: false,
@@ -277,6 +282,27 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
+// Extra shortcuts alongside the emulator's own mapping (X = A, Z = B,
+// arrows, Right Shift = Select): Enter confirms like A, Escape cancels like
+// B, and Space opens the menu like Start. Driven through the emulator's API,
+// so held keys behave exactly like the touch buttons.
+const extraKeys = { Enter: 'a', NumpadEnter: 'a', Escape: 'b', Space: 'start' };
+window.addEventListener('keydown', (event) => {
+  if (app.dataset.state !== 'playing' || !emu || event.repeat) return;
+  // A focused button keeps its native keyboard behavior (Enter clicks it).
+  if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+  const button = extraKeys[event.code];
+  if (button) {
+    event.preventDefault();
+    emu.pressDown(button);
+  }
+});
+window.addEventListener('keyup', (event) => {
+  if (!emu) return;
+  const button = extraKeys[event.code];
+  if (button) emu.pressUp(button);
+});
+
 // Pause when the tab is hidden.
 document.addEventListener('visibilitychange', () => {
   if (!emu) return;
@@ -344,6 +370,16 @@ dpad.addEventListener('pointermove', (event) => {
 });
 dpad.addEventListener('pointerup', () => setDirection(null));
 dpad.addEventListener('pointercancel', () => setDirection(null));
+
+// Web Analytics (Vercel dashboard → project → Analytics → Enable). Skipped on
+// local runs so dev visits send nothing anywhere.
+if (!['localhost', '127.0.0.1'].includes(location.hostname) && location.protocol.startsWith('http')) {
+  try {
+    injectAnalytics();
+  } catch {
+    // Analytics must never break the game.
+  }
+}
 
 // For debugging from the console and for the automated tests.
 window.dailyRed = {

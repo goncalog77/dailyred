@@ -6,6 +6,8 @@
 #   - mGBA libretro core compiled to WebAssembly (GPL-3.0 / MPL-2.0),
 #     from https://github.com/arianrhodsandlot/retroarch-emscripten-build
 #   - Pixelify Sans, latin subset (SIL Open Font License 1.1)
+#   - Vercel Web Analytics (Apache-2.0): vendored from the pnpm-installed
+#     @vercel/analytics package so the site stays self-hosted.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,5 +66,12 @@ curl -fSL --retry 3 -o "$TMP/font.woff2" "$FONT_URL"
 check "$TMP/font.woff2" "$FONT_SHA"
 cp "$TMP/font.woff2" "$VENDOR/pixelify-sans.woff2"
 curl -fSL --retry 3 -o "$VENDOR/pixelify-sans.OFL.txt" "$FONT_LICENSE_URL"
+
+echo ">> Vercel Web Analytics (from pnpm store, run pnpm install first)"
+ANALYTICS_SRC="$ROOT/node_modules/@vercel/analytics/dist/index.mjs"
+if [ ! -f "$ANALYTICS_SRC" ]; then
+  echo "Missing $ANALYTICS_SRC. Run pnpm install first."; exit 1
+fi
+cp "$ANALYTICS_SRC" "$VENDOR/vercel-analytics.js"
 
 ls -la "$VENDOR"

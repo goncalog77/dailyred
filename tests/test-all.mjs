@@ -66,7 +66,7 @@ try {
   manifestRom = JSON.parse(readFileSync(join(ROOT, 'web/game/manifest.json'), 'utf8')).rom;
 } catch { /* reported below */ }
 hint(typeof manifestRom === 'string' && manifestRom && existsSync(join(ROOT, 'web/game', manifestRom)), "website ROM copy missing. Run: scripts/build-rom.sh");
-for (const f of ['nostalgist.js', 'mgba_libretro.js', 'mgba_libretro.wasm', 'pixelify-sans.woff2']) {
+for (const f of ['nostalgist.js', 'mgba_libretro.js', 'mgba_libretro.wasm', 'pixelify-sans.woff2', 'vercel-analytics.js']) {
   hint(existsSync(join(ROOT, 'web/vendor', f)), `web/vendor/${f} missing. Run: scripts/fetch-vendor.sh`);
 }
 try {

@@ -11,5 +11,8 @@
     "teams": "pnpm --filter dailyred-tests teams",
     "test": "pnpm --filter dailyred-tests test",
     "test:all": "pnpm --filter dailyred-tests test:all"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }

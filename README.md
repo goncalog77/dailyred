@@ -388,20 +388,29 @@ versioned vendor/core files while keeping `manifest.json` fresh. The first
 deploy takes several minutes (the ARM toolchain is a ~280 MB download); later
 deploys reuse nothing and rebuild from scratch, so expect the same each time.
 No environment variables are needed. Your battle stats still live in each
-visitor's browser (localStorage), not on the server.
+visitor's browser (localStorage), not on the server. For traffic stats,
+enable Web Analytics in the Vercel dashboard (project → Analytics → Enable):
+the site already ships the tracking snippet (`web/vendor/vercel-analytics.js`,
+via the `@vercel/analytics` dependency) and reports page views automatically.
 
 To verify the exact deploy build locally first: `pnpm build`.
 
 ## Copyright and licenses
 
-Daily Red is a free, unofficial fan project. It isn't affiliated with or
+Daily Red is a free, unofficial fan project made just for fun —
+non-commercial, with no profit of any kind. It isn't affiliated with or
 endorsed by Nintendo, Creatures Inc., GAME FREAK inc. or The Pokémon Company.
 Pokémon and all related names, characters and game content are © Nintendo,
-Creatures Inc. and GAME FREAK inc.
+Creatures Inc. and GAME FREAK inc. All rights reserved by their respective
+owners.
+
+Daily Red's original game, code and changes are ©
+[amoi-builds](https://github.com/amoi-builds).
 
 This repository contains Daily Red's own work: the changes in `patches/`, the
-website and the tests. It doesn't include pret/pokefirered or a built ROM; the
-scripts fetch the decompilation from pret's repository and build locally.
+website and the tests. It doesn't include pret/pokefirered, a built ROM, or
+any game assets; the scripts fetch the decompilation from pret's repository
+and build everything locally on your own machine.
 
 The emulator core is GPL-3.0 (RetroArch) and MPL-2.0 (mGBA). `web/licenses.txt`
 lists all third-party components with links to their source, and the page

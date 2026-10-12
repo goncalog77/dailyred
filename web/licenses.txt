@@ -1,3 +1,18 @@
+Daily Red: rights and fan-project statement
+=============================================
+Daily Red is a free, unofficial, non-commercial fan project made just for
+fun by amoi-builds (https://github.com/amoi-builds). It is not affiliated
+with or endorsed by Nintendo, Creatures Inc., GAME FREAK inc. or
+The Pokémon Company.
+
+Pokémon and all related names, characters and game content are © Nintendo,
+Creatures Inc. and GAME FREAK inc. All rights reserved by their respective
+owners.
+
+No ROM or game assets are distributed with this repository or the site
+sources; the build scripts compile the game locally from the pret
+decompilation (see below) on your own machine.
+
 Daily Red: third-party software and content
 ===========================================
 

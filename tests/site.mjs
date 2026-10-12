@@ -85,6 +85,50 @@ try {
   await sleep(500);
   const audio = await page.evaluate(() => window.dailyRed.audio());
   check(audio.length >= 1 && audio.every((s) => s === 'running'), `emulator audio is running (${audio.join(', ') || 'no audio contexts'})`);
+  // Extra shortcuts: Enter confirms like A, Escape cancels like B. Spy on
+  // the emulator API the site's handlers call through.
+  async function keysThrough(code) {
+    await page.evaluate(() => {
+      window.__seen = [];
+      const emu = window.emu;
+      if (!emu.__origPress) {
+        emu.__origPress = { down: emu.pressDown.bind(emu), up: emu.pressUp.bind(emu) };
+        emu.pressDown = (b, ...rest) => { window.__seen.push(`down:${b}`); return emu.__origPress.down(b, ...rest); };
+        emu.pressUp = (b, ...rest) => { window.__seen.push(`up:${b}`); return emu.__origPress.up(b, ...rest); };
+      }
+      window.__seen.length = 0;
+    });
+    await page.keyboard.down(code);
+    await sleep(300);
+    await page.keyboard.up(code);
+    return page.evaluate(() => window.__seen.join(','));
+  }
+  check(await keysThrough('Enter') === 'down:a,up:a', 'Enter confirms like the A button');
+  check(await keysThrough('Escape') === 'down:b,up:b', 'Escape cancels like the B button');
+  await page.evaluate(() => {
+    const emu = window.emu;
+    emu.pressDown = emu.__origPress.down;
+    emu.pressUp = emu.__origPress.up;
+    delete emu.__origPress;
+  });
+  // Space is Start: it opens the menu (the player can't walk while it's
+  // open), and Escape backs out again.
+  const yBeforeMenu = (await getStatus(page)).y;
+  await page.keyboard.press(' ');
+  await sleep(800);
+  await page.evaluate(() => window.emu.pressDown('up'));
+  await sleep(600);
+  await page.evaluate(() => window.emu.pressUp('up'));
+  await sleep(300);
+  const menuOpened = (await getStatus(page)).y === yBeforeMenu;
+  check(menuOpened, 'Space opens the menu (the player cannot walk while it is open)');
+  await page.keyboard.press('Escape');
+  await sleep(800);
+  await page.evaluate(() => window.emu.pressDown('up'));
+  await sleep(600);
+  await page.evaluate(() => window.emu.pressUp('up'));
+  await sleep(300);
+  check(menuOpened && (await getStatus(page)).y < yBeforeMenu, 'Escape closes the menu (the player walks again)');
   const box = await page.locator('canvas').boundingBox();
   check(Math.round(box.width) === 720 && Math.round(box.height) === 480, `game screen is 720x480 on desktop (got ${box.width}x${box.height})`);
   const team1 = JSON.stringify(readParty((await getStatus(page)).mem).party.map((m) => m.species));

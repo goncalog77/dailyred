@@ -30,7 +30,7 @@ else
 fi
 
 VENDOR_OK=1
-for f in nostalgist.js mgba_libretro.js mgba_libretro.wasm pixelify-sans.woff2; do
+for f in nostalgist.js mgba_libretro.js mgba_libretro.wasm pixelify-sans.woff2 vercel-analytics.js; do
   [ -f "$ROOT/web/vendor/$f" ] || VENDOR_OK=0
 done
 if [ "$VENDOR_OK" = "1" ]; then
